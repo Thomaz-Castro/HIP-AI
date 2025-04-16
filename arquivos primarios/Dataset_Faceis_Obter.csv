@@ -1,0 +1,11 @@
+idade,sexo,peso_kg,altura_cm,imc,historico_hipertensao,historico_diabetes,historico_doenca_cardiovascular,historico_colesterol_alto,historico_tabagismo,anos_fumando,frequencia_exercicio_semanal,tempo_exercicio_minutos,horas_sono_por_noite,consumo_alcool_semanal,dieta_rica_sodio,consumo_frutas_vegetais_dia,nivel_stress,label_pressao_alta
+69,0,76,167,27.24,1,0,0,1,0,0,5,73,8.58,2,0,4,9,1
+74,1,68,158,27.21,0,1,0,0,0,0,4,35,7.38,6,0,3,3,0
+24,0,111,198,28.32,0,0,0,0,0,0,4,10,7.53,8,1,5,6,0
+19,1,58,178,18.28,0,0,0,0,0,0,5,72,7.81,3,0,2,4,0
+42,0,115,159,45.53,0,0,0,0,1,18,1,78,5.69,9,1,1,10,1
+60,1,63,186,18.26,0,0,0,0,0,0,4,56,5.85,0,0,4,2,0
+50,0,98,163,36.85,1,1,0,1,1,25,2,12,8.78,7,1,0,8,1
+33,1,61,171,20.86,0,0,0,0,0,0,3,31,6.59,1,0,3,5,0
+55,0,105,152,45.43,1,0,1,1,1,32,0,0,6.14,5,1,2,9,1
+28,1,70,181,21.38,0,0,0,0,0,0,6,85,8.33,4,0,5,3,0
