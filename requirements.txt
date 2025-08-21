@@ -1,0 +1,6 @@
+flask
+flask_sqlalchemy
+flask_login
+passlib[bcrypt]
+fpdf
+google-generativeai
