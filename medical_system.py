@@ -180,6 +180,7 @@ class LoginWindow(QDialog):
                 border-radius: 10px;
                 padding: 20px;
                 margin: 20px;
+                color: black;
             }
             QLineEdit {
                 padding: 10px;
@@ -204,6 +205,7 @@ class LoginWindow(QDialog):
             QLabel {
                 font-size: 16px;
                 font-weight: bold;
+                color: black;
             }
         """)
         
