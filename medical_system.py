@@ -17,6 +17,8 @@ from pymongo import MongoClient
 from bson.objectid import ObjectId
 import os
 from dotenv import load_dotenv
+from google import genai
+from google.genai import types
 
 # Carrega variáveis de ambiente
 load_dotenv()
@@ -507,7 +509,7 @@ class HypertensionAssessment(QWidget):
         }
 
         # Simula avaliação de IA (substitua pela integração real com Gemini)
-        resultado = self.simulate_ai_assessment(assessment_data)
+        resultado = self.ai_assessment(assessment_data)
 
         self.result.setPlainText(resultado)
         self.last_assessment = {
@@ -638,6 +640,121 @@ Consulte sempre um médico para diagnóstico e tratamento adequados.
 """
 
         return report
+    
+    def ai_assessment(self, data):
+        """Avaliação de risco de hipertensão usando Gemini AI"""
+        
+        API_KEY = "AIzaSyAmraGN6apiXmyQTcgKaj-BaM_Zzro6IHk"  # substitua pela sua chave
+        
+        try:
+            # Inicializa cliente Gemini
+            gemini = genai.Client(api_key=API_KEY, 
+                                http_options=types.HttpOptions(api_version="v1alpha"))
+            chat = gemini.chats.create(model="gemini-2.0-flash")
+            
+            # Prepara dados para análise
+            auto = data["avaliacaoagil"]
+            exames = data.get("exames")
+            
+            # Calcula IMC para incluir no prompt
+            imc = None
+            if auto["altura_cm"] > 0:
+                imc = auto["peso_kg"] / ((auto["altura_cm"]/100) ** 2)
+            
+            # Constrói prompt estruturado
+            prompt = f"""
+    Você é um especialista em cardiologia e medicina preventiva. Analise os dados do paciente e forneça uma avaliação de risco de hipertensão seguindo EXATAMENTE o formato especificado abaixo.
+
+    DADOS DO PACIENTE:
+    =================
+
+    DADOS DEMOGRÁFICOS E ESTILO DE VIDA:
+    • Idade: {auto['idade_anos']} anos
+    • Sexo: {'Masculino' if auto['sexo_masculino'] else 'Feminino'}
+    • Histórico familiar de hipertensão: {'Sim' if auto['historico_familiar_hipertensao'] else 'Não'}
+    • Altura: {auto['altura_cm']} cm
+    • Peso: {auto['peso_kg']} kg
+    • IMC: {imc:.1f if imc else 'Não calculado'}
+    • Porções de frutas/vegetais por dia: {auto['porcoes_frutas_vegetais_dia']}
+    • Minutos de exercício por semana: {auto['minutos_exercicio_semana']}
+    • Fuma atualmente: {'Sim' if auto['fuma_atualmente'] else 'Não'}
+    • Bebidas alcoólicas por semana: {auto['bebidas_alcoolicas_semana']}
+    • Nível de estresse (0-10): {auto['nivel_estresse_0_10']}
+    • Qualidade do sono ruim: {'Sim' if auto['sono_qualidade_ruim'] else 'Não'}
+
+    EXAMES LABORATORIAIS:
+    """
+
+            if exames:
+                prompt += f"""
+    • Colesterol LDL: {exames.get('colesterol_ldl_mg_dL', 'Não informado')} mg/dL
+    • Colesterol HDL: {exames.get('colesterol_hdl_mg_dL', 'Não informado')} mg/dL
+    • Triglicerídeos: {exames.get('triglicerideos_mg_dL', 'Não informado')} mg/dL
+    • Glicemia de jejum: {exames.get('glicemia_jejum_mg_dL', 'Não informado')} mg/dL
+    • HbA1c: {exames.get('hba1c_percent', 'Não informado')}%
+    • Creatinina: {exames.get('creatinina_mg_dL', 'Não informado')} mg/dL
+    • Proteinúria: {'Positiva' if exames.get('proteinuria_positiva', False) else 'Negativa'}
+    • Diagnóstico de apneia do sono: {'Sim' if exames.get('diagnostico_apneia_sono', False) else 'Não'}
+    • Cortisol sérico: {exames.get('cortisol_serico_ug_dL', 'Não informado')} μg/dL
+    • Mutação genética para hipertensão: {'Sim' if exames.get('mutacao_genetica_hipertensao', False) else 'Não'}
+    • BPM em repouso: {exames.get('bpm_repouso', 'Não informado')}
+    • Índice PM2.5: {exames.get('indice_pm25', 'Não informado')}
+    """
+            else:
+                prompt += "Não foram fornecidos exames laboratoriais.\n"
+
+            prompt += f"""
+
+    INSTRUÇÕES PARA AVALIAÇÃO:
+    =========================
+
+    1. Analise todos os fatores de risco para hipertensão presentes nos dados
+    2. Calcule uma pontuação de risco baseada em evidências científicas
+    3. Classifique o risco como: BAIXO, MODERADO, ALTO ou MUITO ALTO
+    4. Forneça recomendações específicas baseadas no perfil do paciente
+
+    FORMATO DE RESPOSTA OBRIGATÓRIO:
+    ===============================
+
+    🏥 RELATÓRIO DE AVALIAÇÃO DE RISCO DE HIPERTENSÃO
+
+    📊 PONTUAÇÃO DE RISCO: [pontuação] pontos
+    🎯 NÍVEL DE RISCO: [BAIXO/MODERADO/ALTO/MUITO ALTO]
+
+    ⚠️ FATORES DE RISCO IDENTIFICADOS:
+    [Liste numericamente cada fator de risco encontrado, um por linha]
+
+    💡 RECOMENDAÇÕES:
+    [Recomendações específicas baseadas no perfil do paciente]
+
+    📝 ORIENTAÇÕES GERAIS:
+    • Manter pressão arterial abaixo de 120/80 mmHg
+    • Praticar exercícios regulares (mínimo 150min/semana)
+    • Manter dieta rica em frutas, vegetais e pobre em sódio
+    • Controlar peso corporal (IMC < 25)
+    • Evitar tabagismo e consumo excessivo de álcool
+    • Gerenciar níveis de estresse
+    • Manter qualidade adequada do sono
+
+    ⏰ Data da Avaliação: {datetime.now().strftime('%d/%m/%Y %H:%M')}
+
+    IMPORTANTE: Esta avaliação é apenas informativa. 
+    Consulte sempre um médico para diagnóstico e tratamento adequados.
+
+    RESPONDA APENAS COM O RELATÓRIO NO FORMATO ESPECIFICADO ACIMA.
+    """
+
+            # Envia prompt para Gemini
+            response = chat.send_message(prompt)
+            
+            # Retorna o texto da resposta
+            return response.text
+            
+        except Exception as e:
+            # Fallback para simulação local em caso de erro
+            print(f"Erro na avaliação com Gemini: {e}")
+            return self.simulate_ai_assessment(data)  # usa sua função original como backup
+
 
     def salvar_relatorio(self):
         """Salva relatório no banco de dados (apenas médicos)"""
