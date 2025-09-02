@@ -644,12 +644,14 @@ Consulte sempre um médico para diagnóstico e tratamento adequados.
     def ai_assessment(self, data):
         """Avaliação de risco de hipertensão usando Gemini AI"""
         
-        API_KEY = "AIzaSyAmraGN6apiXmyQTcgKaj-BaM_Zzro6IHk"  # substitua pela sua chave
+        API_KEY = os.getenv("GEMINI_API_KEY")
         
         try:
             # Inicializa cliente Gemini
-            gemini = genai.Client(api_key=API_KEY, 
-                                http_options=types.HttpOptions(api_version="v1alpha"))
+            gemini = genai.Client(
+                api_key=API_KEY, 
+                http_options=types.HttpOptions(api_version="v1alpha")
+            )
             chat = gemini.chats.create(model="gemini-2.0-flash")
             
             # Prepara dados para análise
@@ -660,6 +662,8 @@ Consulte sempre um médico para diagnóstico e tratamento adequados.
             imc = None
             if auto["altura_cm"] > 0:
                 imc = auto["peso_kg"] / ((auto["altura_cm"]/100) ** 2)
+            
+            imc_str = f"{imc:.1f}" if imc else "Não calculado"
             
             # Constrói prompt estruturado
             prompt = f"""
@@ -674,7 +678,7 @@ Consulte sempre um médico para diagnóstico e tratamento adequados.
     • Histórico familiar de hipertensão: {'Sim' if auto['historico_familiar_hipertensao'] else 'Não'}
     • Altura: {auto['altura_cm']} cm
     • Peso: {auto['peso_kg']} kg
-    • IMC: {imc:.1f if imc else 'Não calculado'}
+    • IMC: {imc_str}
     • Porções de frutas/vegetais por dia: {auto['porcoes_frutas_vegetais_dia']}
     • Minutos de exercício por semana: {auto['minutos_exercicio_semana']}
     • Fuma atualmente: {'Sim' if auto['fuma_atualmente'] else 'Não'}
@@ -754,7 +758,6 @@ Consulte sempre um médico para diagnóstico e tratamento adequados.
             # Fallback para simulação local em caso de erro
             print(f"Erro na avaliação com Gemini: {e}")
             return self.simulate_ai_assessment(data)  # usa sua função original como backup
-
 
     def salvar_relatorio(self):
         """Salva relatório no banco de dados (apenas médicos)"""
