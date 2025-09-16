@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (
     QLabel, QSpinBox, QDoubleSpinBox, QCheckBox, QPushButton,
     QPlainTextEdit, QHBoxLayout, QLineEdit, QScrollArea, QStackedWidget,
     QComboBox, QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox,
-    QTabWidget, QTextEdit, QDateEdit, QDialog
+    QTabWidget, QTextEdit, QDateEdit, QDialog, QFrame
 )
 from PyQt5.QtGui import QFont, QPixmap
 from PyQt5.QtCore import Qt, QDate
@@ -301,152 +301,485 @@ class HypertensionAssessment(QWidget):
         self.init_ui()
 
     def init_ui(self):
+        # Aplicar estilo geral
+        self.setStyleSheet("""
+            QWidget {
+                font-family: 'Segoe UI', Arial, sans-serif;
+                font-size: 10pt;
+                background-color: #f8f9fa;
+            }
+            
+            QGroupBox {
+                font-weight: bold;
+                font-size: 11pt;
+                color: #2c3e50;
+                border: 2px solid #bdc3c7;
+                border-radius: 12px;
+                margin-top: 15px;
+                padding-top: 10px;
+                background-color: white;
+            }
+            
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 15px;
+                padding: 5px 10px;
+                background-color: #3498db;
+                color: white;
+                border-radius: 8px;
+                font-weight: bold;
+            }
+            
+            QLabel {
+                color: #34495e;
+                font-weight: 500;
+                padding: 2px;
+            }
+            
+            QSpinBox, QDoubleSpinBox, QComboBox, QLineEdit {
+                border: 2px solid #bdc3c7;
+                border-radius: 6px;
+                padding: 8px 12px;
+                background-color: white;
+                font-size: 10pt;
+                min-height: 20px;
+            }
+            
+            QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus, QLineEdit:focus {
+                border-color: #3498db;
+                outline: none;
+            }
+            
+            QSpinBox:hover, QDoubleSpinBox:hover, QComboBox:hover {
+                border-color: #5dade2;
+            }
+            
+            QCheckBox {
+                spacing: 8px;
+                font-weight: 500;
+                color: #34495e;
+            }
+            
+            QCheckBox::indicator {
+                width: 18px;
+                height: 18px;
+                border: 2px solid #bdc3c7;
+                border-radius: 4px;
+                background-color: white;
+            }
+            
+            QCheckBox::indicator:checked {
+                background-color: #27ae60;
+                border-color: #27ae60;
+                image: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEzLjMzMzMgNC42NjY2N0w2IDEyTDIuNjY2NjcgOC42NjY2N0w0LjA4IDcuMjUzMzNMNiA5LjE3MzMzTDExLjkyIDMuMjUzMzNMMTMuMzMzMyA0LjY2NjY3WiIgZmlsbD0id2hpdGUiLz4KICA8L3N2Zz4K);
+            }
+            
+            QCheckBox::indicator:hover {
+                border-color: #5dade2;
+            }
+            
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #3498db, stop: 1 #2980b9);
+                border: none;
+                color: white;
+                padding: 12px 24px;
+                font-size: 11pt;
+                font-weight: bold;
+                border-radius: 8px;
+                min-height: 20px;
+                min-width: 120px;
+            }
+            
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #5dade2, stop: 1 #3498db);
+            }
+            
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #2980b9, stop: 1 #21618c);
+            }
+            
+            QPushButton:disabled {
+                background: #95a5a6;
+                color: #ecf0f1;
+            }
+            
+            QPushButton#btn_salvar {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #27ae60, stop: 1 #229954);
+            }
+            
+            QPushButton#btn_salvar:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #58d68d, stop: 1 #27ae60);
+            }
+            
+            QPushButton#btn_pdf {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #e74c3c, stop: 1 #c0392b);
+            }
+            
+            QPushButton#btn_pdf:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #ec7063, stop: 1 #e74c3c);
+            }
+            
+            QPlainTextEdit {
+                border: 2px solid #bdc3c7;
+                border-radius: 8px;
+                background-color: white;
+                padding: 12px;
+                font-family: 'Consolas', 'Monaco', monospace;
+                font-size: 10pt;
+                line-height: 1.4;
+            }
+            
+            QScrollArea {
+                border: none;
+                background-color: #f8f9fa;
+            }
+            
+            QScrollBar:vertical {
+                border: none;
+                background: #ecf0f1;
+                width: 12px;
+                border-radius: 6px;
+            }
+            
+            QScrollBar::handle:vertical {
+                background: #bdc3c7;
+                border-radius: 6px;
+                min-height: 30px;
+            }
+            
+            QScrollBar::handle:vertical:hover {
+                background: #95a5a6;
+            }
+            
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                border: none;
+                background: none;
+                height: 0px;
+            }
+        """)
+
         # Widget de conteúdo para scroll
         content = QWidget()
         content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(20, 20, 20, 20)
-        content_layout.setSpacing(15)
+        content_layout.setContentsMargins(25, 25, 25, 25)
+        content_layout.setSpacing(20)
+
+        # Título principal
+        title_label = QLabel("🩺 Avaliação de Hipertensão")
+        title_label.setFont(QFont("Segoe UI", 16, QFont.Bold))
+        title_label.setStyleSheet("""
+            QLabel {
+                color: #2c3e50;
+                padding: 15px 0px;
+                border-bottom: 3px solid #3498db;
+                margin-bottom: 10px;
+            }
+        """)
+        title_label.setAlignment(Qt.AlignCenter)
+        content_layout.addWidget(title_label)
 
         # Seleção de paciente (apenas para médicos)
         if self.user["user_type"] == "doctor":
-            patient_group = QGroupBox("👤 Selecionar Paciente")
+            patient_group = QGroupBox("👤 Seleção de Paciente")
             patient_layout = QFormLayout()
+            patient_layout.setSpacing(10)
+            patient_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
 
             self.patient_combo = QComboBox()
+            self.patient_combo.setMinimumHeight(35)
             self.load_patients()
-            patient_layout.addRow("Paciente:", self.patient_combo)
-
+            
+            # Label personalizado para o paciente
+            patient_label = QLabel("Selecionar Paciente:")
+            patient_label.setStyleSheet("font-weight: bold; color: #34495e;")
+            
+            patient_layout.addRow(patient_label, self.patient_combo)
             patient_group.setLayout(patient_layout)
             content_layout.addWidget(patient_group)
 
-        # --- Avaliação Agíl ---
-        auto_gbox = QGroupBox("📝 Avaliação Agíl")
+        # --- Avaliação Ágil ---
+        auto_gbox = QGroupBox("📝 Avaliação Ágil")
         auto_form = QFormLayout()
+        auto_form.setSpacing(15)
+        auto_form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+
+        # Dados pessoais
         self.idade = QSpinBox()
         self.idade.setRange(0, 120)
         self.idade.setSuffix(" anos")
-        auto_form.addRow("Idade (anos):", self.idade)
-        self.sexo_m = QCheckBox("Masculino?")
-        auto_form.addRow("Sexo masculino:", self.sexo_m)
-        self.hist_fam = QCheckBox()
-        auto_form.addRow("Histórico familiar hipertensão:", self.hist_fam)
+        self.idade.setMinimumHeight(35)
+        auto_form.addRow(self.create_bold_label("Idade:"), self.idade)
+
+        self.sexo_m = QCheckBox("Masculino")
+        self.sexo_m.setStyleSheet("QCheckBox { font-weight: bold; }")
+        auto_form.addRow(self.create_bold_label("Sexo:"), self.sexo_m)
+
+        self.hist_fam = QCheckBox("Sim")
+        auto_form.addRow(self.create_bold_label("Histórico familiar de hipertensão:"), self.hist_fam)
+
+        # Medidas físicas
+        measures_frame = QFrame()
+        measures_layout = QHBoxLayout(measures_frame)
+        measures_layout.setSpacing(10)
+        
         self.altura = QDoubleSpinBox()
-        self.altura.setRange(0, 300)
+        self.altura.setRange(50, 250)
         self.altura.setSuffix(" cm")
-        auto_form.addRow("Altura (cm):", self.altura)
+        self.altura.setMinimumHeight(35)
+        
         self.peso = QDoubleSpinBox()
-        self.peso.setRange(0, 500)
+        self.peso.setRange(10, 300)
         self.peso.setDecimals(1)
         self.peso.setSuffix(" kg")
-        auto_form.addRow("Peso (kg):", self.peso)
+        self.peso.setMinimumHeight(35)
+        
         self.imc = QLineEdit()
         self.imc.setReadOnly(True)
-        auto_form.addRow("IMC (calculado):", self.imc)
+        self.imc.setStyleSheet("""
+            QLineEdit[readOnly="true"] {
+                background-color: #ecf0f1;
+                color: #2c3e50;
+                font-weight: bold;
+            }
+        """)
+        self.imc.setMinimumHeight(35)
+        
+        measures_layout.addWidget(QLabel("Altura:"))
+        measures_layout.addWidget(self.altura)
+        measures_layout.addWidget(QLabel("Peso:"))
+        measures_layout.addWidget(self.peso)
+        measures_layout.addWidget(QLabel("IMC:"))
+        measures_layout.addWidget(self.imc)
+        
+        auto_form.addRow(self.create_bold_label("Medidas Físicas:"), measures_frame)
+        
         self.altura.valueChanged.connect(self.calcular_imc)
         self.peso.valueChanged.connect(self.calcular_imc)
+
+        # Hábitos alimentares e exercícios
         self.frutas = QSpinBox()
         self.frutas.setRange(0, 20)
-        auto_form.addRow("Porções frutas/vegetais dia:", self.frutas)
+        self.frutas.setSuffix(" porções/dia")
+        self.frutas.setMinimumHeight(35)
+        auto_form.addRow(self.create_bold_label("Frutas/Vegetais por dia:"), self.frutas)
+
         self.exercicio = QSpinBox()
         self.exercicio.setRange(0, 10000)
-        self.exercicio.setSuffix(" min")
-        auto_form.addRow("Minutos exercício semana:", self.exercicio)
-        self.fuma = QCheckBox()
-        auto_form.addRow("Fuma atualmente:", self.fuma)
+        self.exercicio.setSuffix(" min/semana")
+        self.exercicio.setMinimumHeight(35)
+        auto_form.addRow(self.create_bold_label("Exercício por semana:"), self.exercicio)
+
+        # Vícios e estilo de vida
+        self.fuma = QCheckBox("Sim")
+        auto_form.addRow(self.create_bold_label("Fumante:"), self.fuma)
+
         self.alcool = QSpinBox()
         self.alcool.setRange(0, 100)
-        self.alcool.setSuffix(" doses")
-        auto_form.addRow("Bebidas alcoólicas semana:", self.alcool)
+        self.alcool.setSuffix(" doses/semana")
+        self.alcool.setMinimumHeight(35)
+        auto_form.addRow(self.create_bold_label("Bebidas alcoólicas:"), self.alcool)
+
         self.estresse = QSpinBox()
         self.estresse.setRange(0, 10)
-        auto_form.addRow("Nível estresse (0-10):", self.estresse)
-        self.sono = QCheckBox()
-        auto_form.addRow("Sono qualidade ruim:", self.sono)
+        self.estresse.setSuffix(" (0=baixo, 10=alto)")
+        self.estresse.setMinimumHeight(35)
+        auto_form.addRow(self.create_bold_label("Nível de estresse:"), self.estresse)
+
+        self.sono = QCheckBox("Sim")
+        auto_form.addRow(self.create_bold_label("Qualidade do sono ruim:"), self.sono)
+
         auto_gbox.setLayout(auto_form)
         content_layout.addWidget(auto_gbox)
 
         # --- Exames Médicos opcionais ---
-        self.chk_exames = QCheckBox("Possui dados de exame médico?")
+        self.chk_exames = QCheckBox("🩺 Possui dados de exames médicos?")
+        self.chk_exames.setStyleSheet("""
+            QCheckBox {
+                font-size: 12pt;
+                font-weight: bold;
+                color: #2c3e50;
+                padding: 10px;
+                background-color: white;
+                border: 2px solid #3498db;
+                border-radius: 8px;
+            }
+        """)
         self.chk_exames.stateChanged.connect(self.toggle_exames)
         content_layout.addWidget(self.chk_exames)
 
-        self.exame_gbox = QGroupBox("🩺 Exames Médicos (opcional)")
+        self.exame_gbox = QGroupBox("🔬 Exames Médicos (Opcional)")
         exame_form = QFormLayout()
+        exame_form.setSpacing(15)
+        exame_form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
 
-        def make_spin(maxv, suffix=""):
+        def make_spin(maxv, suffix="", decimal_places=1):
             sb = QDoubleSpinBox()
             sb.setRange(0, maxv)
-            sb.setDecimals(1)
+            sb.setDecimals(decimal_places)
             sb.setSuffix(suffix)
-            sb.setSpecialValueText("nulo")
+            sb.setSpecialValueText("não informado")
+            sb.setMinimumHeight(35)
             return sb
+
+        # Colesterol
+        cholesterol_frame = QFrame()
+        cholesterol_layout = QHBoxLayout(cholesterol_frame)
+        
         self.ldl = make_spin(500, " mg/dL")
-        exame_form.addRow("Colesterol LDL (mg/dL):", self.ldl)
         self.hdl = make_spin(200, " mg/dL")
-        exame_form.addRow("Colesterol HDL (mg/dL):", self.hdl)
+        
+        cholesterol_layout.addWidget(QLabel("LDL:"))
+        cholesterol_layout.addWidget(self.ldl)
+        cholesterol_layout.addWidget(QLabel("HDL:"))
+        cholesterol_layout.addWidget(self.hdl)
+        
+        exame_form.addRow(self.create_bold_label("Colesterol:"), cholesterol_frame)
+
+        # Outros exames de sangue
         self.trig = make_spin(1000, " mg/dL")
-        exame_form.addRow("Triglicerídeos (mg/dL):", self.trig)
+        exame_form.addRow(self.create_bold_label("Triglicerídeos:"), self.trig)
+
+        glucose_frame = QFrame()
+        glucose_layout = QHBoxLayout(glucose_frame)
+        
         self.glic = make_spin(500, " mg/dL")
-        exame_form.addRow("Glicemia jejum (mg/dL):", self.glic)
         self.hba1c = make_spin(20, " %")
-        exame_form.addRow("HbA1c (%):", self.hba1c)
+        
+        glucose_layout.addWidget(QLabel("Jejum:"))
+        glucose_layout.addWidget(self.glic)
+        glucose_layout.addWidget(QLabel("HbA1c:"))
+        glucose_layout.addWidget(self.hba1c)
+        
+        exame_form.addRow(self.create_bold_label("Glicemia:"), glucose_frame)
+
         self.creat = make_spin(10, " mg/dL")
-        exame_form.addRow("Creatinina (mg/dL):", self.creat)
-        self.protein = QCheckBox()
-        exame_form.addRow("Proteinúria positiva:", self.protein)
-        self.apneia = QCheckBox()
-        exame_form.addRow("Diagnóstico apneia sono:", self.apneia)
+        exame_form.addRow(self.create_bold_label("Creatinina:"), self.creat)
+
+        # Exames especiais
+        self.protein = QCheckBox("Positiva")
+        exame_form.addRow(self.create_bold_label("Proteinúria:"), self.protein)
+
+        self.apneia = QCheckBox("Diagnosticada")
+        exame_form.addRow(self.create_bold_label("Apneia do sono:"), self.apneia)
+
         self.cortisol = make_spin(100, " µg/dL")
-        exame_form.addRow("Cortisol sérico (µg/dL):", self.cortisol)
-        self.mutacao = QCheckBox()
-        exame_form.addRow("Mutação genética hipertensão:", self.mutacao)
-        self.bpm = make_spin(200, " bpm")
-        exame_form.addRow("BPM repouso:", self.bpm)
+        exame_form.addRow(self.create_bold_label("Cortisol sérico:"), self.cortisol)
+
+        self.mutacao = QCheckBox("Presente")
+        exame_form.addRow(self.create_bold_label("Mutação genética:"), self.mutacao)
+
+        # Parâmetros físicos
+        vitals_frame = QFrame()
+        vitals_layout = QHBoxLayout(vitals_frame)
+        
+        self.bpm = make_spin(200, " bpm", 0)
         self.pm25 = make_spin(500, " µg/m³")
-        exame_form.addRow("Índice PM2.5:", self.pm25)
+        
+        vitals_layout.addWidget(QLabel("BPM repouso:"))
+        vitals_layout.addWidget(self.bpm)
+        vitals_layout.addWidget(QLabel("PM2.5:"))
+        vitals_layout.addWidget(self.pm25)
+        
+        exame_form.addRow(self.create_bold_label("Parâmetros adicionais:"), vitals_frame)
+
         self.exame_gbox.setLayout(exame_form)
         content_layout.addWidget(self.exame_gbox)
 
         # --- Botões ---
-        btns = QHBoxLayout()
-        self.btn_avaliar = QPushButton("Avaliar Hipertensão")
+        btns_container = QFrame()
+        btns_container.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border-radius: 12px;
+                padding: 15px;
+                border: 2px solid #bdc3c7;
+            }
+        """)
+        btns = QHBoxLayout(btns_container)
+        btns.setSpacing(15)
+
+        self.btn_avaliar = QPushButton("🔍 Avaliar Hipertensão")
         self.btn_avaliar.clicked.connect(self.avaliar_hipertensao)
+        self.btn_avaliar.setMinimumHeight(45)
         btns.addWidget(self.btn_avaliar)
 
         if self.user["user_type"] == "doctor":
-            self.btn_salvar = QPushButton("Salvar Relatório")
+            self.btn_salvar = QPushButton("💾 Salvar Relatório")
+            self.btn_salvar.setObjectName("btn_salvar")
             self.btn_salvar.clicked.connect(self.salvar_relatorio)
             self.btn_salvar.setEnabled(False)
+            self.btn_salvar.setMinimumHeight(45)
             btns.addWidget(self.btn_salvar)
 
-        self.btn_pdf = QPushButton("Gerar PDF")
+        self.btn_pdf = QPushButton("📄 Gerar PDF")
+        self.btn_pdf.setObjectName("btn_pdf")
         self.btn_pdf.clicked.connect(self.gerar_pdf)
         self.btn_pdf.setEnabled(False)
+        self.btn_pdf.setMinimumHeight(45)
         btns.addWidget(self.btn_pdf)
-        content_layout.addLayout(btns)
+        
+        content_layout.addWidget(btns_container)
 
         # --- Resultado ---
-        lbl = QLabel("🖥️ Resultado da Avaliação:")
-        lbl.setFont(QFont("", 12, QFont.Bold))
-        content_layout.addWidget(lbl)
+        result_container = QFrame()
+        result_container.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border-radius: 12px;
+                padding: 15px;
+                border: 2px solid #bdc3c7;
+            }
+        """)
+        result_layout = QVBoxLayout(result_container)
+        
+        lbl = QLabel("📊 Resultado da Avaliação")
+        lbl.setFont(QFont("Segoe UI", 14, QFont.Bold))
+        lbl.setStyleSheet("""
+            QLabel {
+                color: #2c3e50;
+                padding: 10px 0px;
+                border-bottom: 2px solid #3498db;
+                margin-bottom: 15px;
+            }
+        """)
+        result_layout.addWidget(lbl)
+        
         self.result = QPlainTextEdit()
         self.result.setReadOnly(True)
-        self.result.setStyleSheet("background: #EFEFEF;")
-        self.result.setMinimumHeight(200)
-        content_layout.addWidget(self.result)
+        self.result.setMinimumHeight(250)
+        self.result.setPlaceholderText("Os resultados da avaliação aparecerão aqui após clicar em 'Avaliar Hipertensão'...")
+        result_layout.addWidget(self.result)
+        
+        content_layout.addWidget(result_container)
 
         # Scroll area
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(content)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
         # Layout principal
         main = QVBoxLayout(self)
+        main.setContentsMargins(0, 0, 0, 0)
         main.addWidget(scroll)
 
         # Oculta exames por padrão
         self.toggle_exames(0)
         self.last_assessment = None
+
+    def create_bold_label(self, text):
+        """Cria um label com estilo em negrito"""
+        label = QLabel(text)
+        label.setStyleSheet("font-weight: bold; color: #34495e;")
+        return label
 
     def load_patients(self):
         """Carrega pacientes no combo box"""
