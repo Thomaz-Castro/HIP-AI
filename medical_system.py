@@ -19,6 +19,7 @@ import os
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from pdfGen import MedicalReportGenerator
 
 # Carrega variáveis de ambiente
 load_dotenv()
@@ -1124,65 +1125,49 @@ Consulte sempre um médico para diagnóstico e tratamento adequados.
             QMessageBox.warning(self, "Erro", "Erro ao salvar relatório!")
 
     def gerar_pdf(self):
+        """Método para gerar PDF no estilo oficial preto e branco"""
         if not self.last_assessment:
-            QMessageBox.warning(
-                self, "Erro", "Realize uma avaliação primeiro!")
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Erro", "Realize uma avaliação primeiro!")
             return
-
-        # Cria PDF
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("Arial", size=10)
-
-        # Título
-        pdf.set_font("Arial", 'B', 16)
-        pdf.cell(0, 10, 'RELATÓRIO DE AVALIAÇÃO DE HIPERTENSÃO', 0, 1, 'C')
-        pdf.ln(5)
-
-        # Dados do usuário
-        pdf.set_font("Arial", 'B', 12)
-        if self.user["user_type"] == "doctor" and self.patient_combo.currentData():
-            patient_name = self.patient_combo.currentText()
-            pdf.cell(0, 8, f'Paciente: {patient_name}', 0, 1)
-            pdf.cell(0, 8, f'Médico: {self.user["name"]}', 0, 1)
-        else:
-            pdf.cell(0, 8, f'Usuário: {self.user["name"]}', 0, 1)
-
-        pdf.cell(
-            0, 8, f'Data: {datetime.now().strftime("%d/%m/%Y %H:%M")}', 0, 1)
-        pdf.ln(5)
-
-        # Dados enviados
-        pdf.set_font("Arial", 'B', 12)
-        pdf.cell(0, 8, 'DADOS DA AVALIAÇÃO:', 0, 1)
-        pdf.set_font("Arial", size=8)
-
-        input_text = json.dumps(self.last_assessment["input_data"],
-                                ensure_ascii=False, indent=2)
-        # Limita o tamanho do texto para caber no PDF
-        if len(input_text) > 2000:
-            input_text = input_text[:2000] + "..."
-
-        pdf.multi_cell(0, 4, input_text.encode(
-            'latin-1', 'replace').decode('latin-1'))
-        pdf.ln(5)
-
-        # Resultado da IA
-        pdf.set_font("Arial", 'B', 12)
-        pdf.cell(0, 8, 'RESULTADO DA AVALIAÇÃO:', 0, 1)
-        pdf.set_font("Arial", size=10)
-
-        # Converte resultado para latin-1 para compatibilidade com PDF
-        result_text = self.last_assessment["ai_result"]
-        result_text = result_text.encode(
-            'latin-1', 'replace').decode('latin-1')
-        pdf.multi_cell(0, 6, result_text)
-
-        # Salva arquivo
-        filename = f"avaliacao_hipertensao_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-        pdf.output(filename)
-        QMessageBox.information(
-            self, "PDF Gerado", f"Arquivo salvo como: {filename}")
+        
+        try:
+            # Prepara dados
+            data = {
+                "avaliacaoagil": self.last_assessment["input_data"]["avaliacaoagil"],
+                "exames": self.last_assessment["input_data"].get("exames"),
+                "ai_result": self.last_assessment["ai_result"]
+            }
+            
+            # Informações do usuário
+            user_info = {
+                "name": self.user["name"],
+                "user_type": self.user.get("user_type", "patient")
+            }
+            
+            # Nome do paciente
+            patient_name = None
+            if self.user["user_type"] == "doctor" and self.patient_combo.currentData():
+                patient_name = self.patient_combo.currentText()
+            
+            # Gera o PDF
+            generator = MedicalReportGenerator()
+            filename = generator.generate_pdf(data, user_info, patient_name)
+            
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.information(
+                self, 
+                "Laudo Gerado", 
+                f"Laudo médico oficial gerado com sucesso:\n{filename}"
+            )
+            
+        except Exception as e:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.critical(
+                self, 
+                "Erro", 
+                f"Erro ao gerar laudo:\n{str(e)}"
+            )
 
 
 class UserManagement(QWidget):
