@@ -105,7 +105,6 @@ class DatabaseManager:
             for key, value in data.items():
                 if isinstance(value, date) and not isinstance(value, datetime):
                     data[key] = datetime.combine(value, datetime.min.time())
-                    print(f"DEBUG: Convertido '{key}' de date para datetime")
 
             result = self.db.users.update_one(
                 {"_id": ObjectId(user_id)},
