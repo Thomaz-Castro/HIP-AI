@@ -810,7 +810,8 @@ Consulte sempre um médico para diagnóstico e tratamento adequados.
         except Exception as e:
             # Fallback para simulação local em caso de erro
             print(f"Erro na avaliação com Gemini: {e}")
-            return self.simulate_ai_assessment(data)  # usa sua função original como backup
+            return "Erro ao avaliar com Gemini. Contate os administradores."
+            #return self.simulate_ai_assessment(data)  # usa sua função original como backup
 
     def salvar_relatorio(self):
         """Salva relatório no banco de dados (apenas médicos)"""
@@ -838,7 +839,7 @@ Consulte sempre um médico para diagnóstico e tratamento adequados.
 
         if report_id:
             QMessageBox.information(
-                self, "Sucesso", "Relatório salvo com sucesso!")
+                self, "Sucesso", "Relatório realizado com sucesso!")
             self.btn_salvar.setEnabled(False)
         else:
             QMessageBox.warning(self, "Erro", "Erro ao salvar relatório!")
