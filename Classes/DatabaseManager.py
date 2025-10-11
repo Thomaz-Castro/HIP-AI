@@ -28,6 +28,17 @@ class DatabaseManager:
             print(f"Erro ao conectar ao MongoDB: {e}")
             return False
         return True
+    
+    def get_latest_patient_report(self, patient_id):
+        """Retorna o último relatório de um paciente"""
+        try:
+            report = self.db.reports.find_one(
+                {"patient_id": ObjectId(patient_id)},
+                sort=[("created_at", pymongo.DESCENDING)]
+            )
+            return report
+        except:
+            return None
 
     def create_indexes(self):
         """Cria índices únicos para email"""

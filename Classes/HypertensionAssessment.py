@@ -20,8 +20,16 @@ class HypertensionAssessment(QWidget):
         self.user = user
         self.init_ui()
 
+    def calculate_age(self, birth_date):
+        """Calcula idade a partir da data de nascimento"""
+        if not birth_date:
+            return 0
+        today = datetime.now()
+        age = today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
+        return age
+
     def init_ui(self):
-        # Aplicar estilo geral
+        # Aplicar estilo geral (mantém o mesmo)
         self.setStyleSheet("""
             QWidget {
                 font-family: 'Segoe UI', Arial, sans-serif;
@@ -214,6 +222,7 @@ class HypertensionAssessment(QWidget):
 
             self.patient_combo = QComboBox()
             self.patient_combo.setMinimumHeight(35)
+            # Não conecta o sinal ainda - será feito após criar todos os campos
             self.load_patients()
             
             # Label personalizado para o paciente
@@ -230,11 +239,18 @@ class HypertensionAssessment(QWidget):
         auto_form.setSpacing(15)
         auto_form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
 
-        # Dados pessoais
-        self.idade = QSpinBox()
-        self.idade.setRange(0, 120)
-        self.idade.setSuffix(" anos")
+        # Idade (calculada, read-only)
+        self.idade = QLineEdit()
+        self.idade.setReadOnly(True)
+        self.idade.setStyleSheet("""
+            QLineEdit[readOnly="true"] {
+                background-color: #ecf0f1;
+                color: #2c3e50;
+                font-weight: bold;
+            }
+        """)
         self.idade.setMinimumHeight(35)
+        self.idade.setPlaceholderText("Calculada automaticamente")
         auto_form.addRow(self.create_bold_label("Idade:"), self.idade)
 
         self.sexo_m = QCheckBox("Masculino")
@@ -494,6 +510,13 @@ class HypertensionAssessment(QWidget):
         # Oculta exames por padrão
         self.toggle_exames(0)
         self.last_assessment = None
+        
+        # Conecta o sinal do combo de pacientes APÓS criar todos os campos
+        if self.user["user_type"] == "doctor":
+            self.patient_combo.currentIndexChanged.connect(self.on_patient_changed)
+        
+        # Carrega dados iniciais
+        self.load_initial_data()
 
     def create_bold_label(self, text):
         """Cria um label com estilo em negrito"""
@@ -507,6 +530,103 @@ class HypertensionAssessment(QWidget):
         self.patient_combo.clear()
         for patient in patients:
             self.patient_combo.addItem(patient["name"], patient["_id"])
+    
+    def on_patient_changed(self):
+        """Chamado quando o paciente selecionado muda"""
+        if self.user["user_type"] == "doctor":
+            self.load_initial_data()
+    
+    def clear_form_fields(self):
+        """Limpa todos os campos do formulário"""
+        # Idade permanece (calculada da data de nascimento)
+        
+        # Campos de avaliação ágil
+        self.sexo_m.setChecked(False)
+        self.hist_fam.setChecked(False)
+        self.altura.setValue(0)
+        self.peso.setValue(0)
+        self.imc.clear()
+        self.frutas.setValue(0)
+        self.exercicio.setValue(0)
+        self.fuma.setChecked(False)
+        self.alcool.setValue(0)
+        self.estresse.setValue(0)
+        self.sono.setChecked(False)
+        
+        # Campos de exames (sempre começam zerados)
+        self.chk_exames.setChecked(False)
+        self.ldl.setValue(0)
+        self.hdl.setValue(0)
+        self.trig.setValue(0)
+        self.glic.setValue(0)
+        self.hba1c.setValue(0)
+        self.creat.setValue(0)
+        self.protein.setChecked(False)
+        self.apneia.setChecked(False)
+        self.cortisol.setValue(0)
+        self.mutacao.setChecked(False)
+        self.bpm.setValue(0)
+        self.pm25.setValue(0)
+    
+    def load_initial_data(self):
+        """Carrega dados iniciais baseado no usuário ou paciente selecionado"""
+        patient_id = None
+        
+        # Define qual paciente buscar
+        if self.user["user_type"] == "patient":
+            patient_id = self.user["_id"]
+            patient_data = self.user
+        elif self.user["user_type"] == "doctor" and hasattr(self, 'patient_combo'):
+            patient_id = self.patient_combo.currentData()
+            if patient_id:
+                patient_data = self.db_manager.db.users.find_one({"_id": patient_id})
+            else:
+                return
+        else:
+            return
+        
+        # Calcula e exibe idade
+        if patient_data and "birth_date" in patient_data:
+            age = self.calculate_age(patient_data["birth_date"])
+            self.idade.setText(f"{age} anos")
+        else:
+            self.idade.clear()
+        
+        # Busca último relatório do paciente
+        if patient_id:
+            last_report = self.db_manager.get_latest_patient_report(patient_id)
+            
+            if last_report and "report_data" in last_report:
+                report_data = last_report["report_data"]
+                input_data = report_data.get("input_data", {})
+                
+                # Verifica se existe autoavaliacao ou avaliacaoagil
+                auto = input_data.get("autoavaliacao") or input_data.get("avaliacaoagil")
+                
+                if auto:
+                    # Preenche campos de avaliação ágil
+                    self.sexo_m.setChecked(auto.get("sexo_masculino", False))
+                    self.hist_fam.setChecked(auto.get("historico_familiar_hipertensao", False))
+                    
+                    if auto.get("altura_cm"):
+                        self.altura.setValue(auto["altura_cm"])
+                    if auto.get("peso_kg"):
+                        self.peso.setValue(auto["peso_kg"])
+                    
+                    self.frutas.setValue(auto.get("porcoes_frutas_vegetais_dia", 0))
+                    self.exercicio.setValue(auto.get("minutos_exercicio_semana", 0))
+                    self.fuma.setChecked(auto.get("fuma_atualmente", False))
+                    self.alcool.setValue(auto.get("bebidas_alcoolicas_semana", 0))
+                    self.estresse.setValue(auto.get("nivel_estresse_0_10", 0))
+                    self.sono.setChecked(auto.get("sono_qualidade_ruim", False))
+                else:
+                    # Se não há dados no relatório, limpa os campos
+                    self.clear_form_fields()
+            else:
+                # Se não há relatórios anteriores, limpa os campos
+                self.clear_form_fields()
+                
+        # Não preenche exames médicos - eles devem ser inseridos a cada avaliação
 
     def calcular_imc(self):
         h = self.altura.value() / 100
@@ -519,10 +639,21 @@ class HypertensionAssessment(QWidget):
     def toggle_exames(self, estado):
         self.exame_gbox.setVisible(estado == Qt.Checked)
 
+    def get_current_age(self):
+        """Obtém idade do campo ou calcula"""
+        idade_text = self.idade.text().replace(" anos", "").strip()
+        try:
+            return int(idade_text)
+        except:
+            return 0
+
     def avaliar_hipertensao(self):
+        # Pega idade atual
+        idade_atual = self.get_current_age()
+        
         # Monta dados de Avaliação Agíl
         auto = {
-            "idade_anos": self.idade.value(),
+            "idade_anos": idade_atual,
             "sexo_masculino": self.sexo_m.isChecked(),
             "historico_familiar_hipertensao": self.hist_fam.isChecked(),
             "altura_cm": self.altura.value(),
@@ -561,7 +692,7 @@ class HypertensionAssessment(QWidget):
             "timestamp": datetime.now().isoformat()
         }
 
-        # Simula avaliação de IA (substitua pela integração real com Gemini)
+        # Avaliação com IA
         resultado = self.ai_assessment(assessment_data)
 
         self.result.setPlainText(resultado)
@@ -720,86 +851,86 @@ Consulte sempre um médico para diagnóstico e tratamento adequados.
             
             # Constrói prompt estruturado
             prompt = f"""
-    Você é um especialista em cardiologia e medicina preventiva. Analise os dados do paciente e forneça uma avaliação de risco de hipertensão seguindo EXATAMENTE o formato especificado abaixo.
+Você é um especialista em cardiologia e medicina preventiva. Analise os dados do paciente e forneça uma avaliação de risco de hipertensão seguindo EXATAMENTE o formato especificado abaixo.
 
-    DADOS DO PACIENTE:
-    =================
+DADOS DO PACIENTE:
+=================
 
-    DADOS DEMOGRÁFICOS E ESTILO DE VIDA:
-    • Idade: {auto['idade_anos']} anos
-    • Sexo: {'Masculino' if auto['sexo_masculino'] else 'Feminino'}
-    • Histórico familiar de hipertensão: {'Sim' if auto['historico_familiar_hipertensao'] else 'Não'}
-    • Altura: {auto['altura_cm']} cm
-    • Peso: {auto['peso_kg']} kg
-    • IMC: {imc_str}
-    • Porções de frutas/vegetais por dia: {auto['porcoes_frutas_vegetais_dia']}
-    • Minutos de exercício por semana: {auto['minutos_exercicio_semana']}
-    • Fuma atualmente: {'Sim' if auto['fuma_atualmente'] else 'Não'}
-    • Bebidas alcoólicas por semana: {auto['bebidas_alcoolicas_semana']}
-    • Nível de estresse (0-10): {auto['nivel_estresse_0_10']}
-    • Qualidade do sono ruim: {'Sim' if auto['sono_qualidade_ruim'] else 'Não'}
+DADOS DEMOGRÁFICOS E ESTILO DE VIDA:
+• Idade: {auto['idade_anos']} anos
+• Sexo: {'Masculino' if auto['sexo_masculino'] else 'Feminino'}
+• Histórico familiar de hipertensão: {'Sim' if auto['historico_familiar_hipertensao'] else 'Não'}
+• Altura: {auto['altura_cm']} cm
+• Peso: {auto['peso_kg']} kg
+• IMC: {imc_str}
+• Porções de frutas/vegetais por dia: {auto['porcoes_frutas_vegetais_dia']}
+• Minutos de exercício por semana: {auto['minutos_exercicio_semana']}
+• Fuma atualmente: {'Sim' if auto['fuma_atualmente'] else 'Não'}
+• Bebidas alcoólicas por semana: {auto['bebidas_alcoolicas_semana']}
+• Nível de estresse (0-10): {auto['nivel_estresse_0_10']}
+• Qualidade do sono ruim: {'Sim' if auto['sono_qualidade_ruim'] else 'Não'}
 
-    EXAMES LABORATORIAIS:
-    """
+EXAMES LABORATORIAIS:
+"""
 
             if exames:
                 prompt += f"""
-    • Colesterol LDL: {exames.get('colesterol_ldl_mg_dL', 'Não informado')} mg/dL
-    • Colesterol HDL: {exames.get('colesterol_hdl_mg_dL', 'Não informado')} mg/dL
-    • Triglicerídeos: {exames.get('triglicerideos_mg_dL', 'Não informado')} mg/dL
-    • Glicemia de jejum: {exames.get('glicemia_jejum_mg_dL', 'Não informado')} mg/dL
-    • HbA1c: {exames.get('hba1c_percent', 'Não informado')}%
-    • Creatinina: {exames.get('creatinina_mg_dL', 'Não informado')} mg/dL
-    • Proteinúria: {'Positiva' if exames.get('proteinuria_positiva', False) else 'Negativa'}
-    • Diagnóstico de apneia do sono: {'Sim' if exames.get('diagnostico_apneia_sono', False) else 'Não'}
-    • Cortisol sérico: {exames.get('cortisol_serico_ug_dL', 'Não informado')} μg/dL
-    • Mutação genética para hipertensão: {'Sim' if exames.get('mutacao_genetica_hipertensao', False) else 'Não'}
-    • BPM em repouso: {exames.get('bpm_repouso', 'Não informado')}
-    • Índice PM2.5: {exames.get('indice_pm25', 'Não informado')}
-    """
+• Colesterol LDL: {exames.get('colesterol_ldl_mg_dL', 'Não informado')} mg/dL
+• Colesterol HDL: {exames.get('colesterol_hdl_mg_dL', 'Não informado')} mg/dL
+• Triglicerídeos: {exames.get('triglicerideos_mg_dL', 'Não informado')} mg/dL
+• Glicemia de jejum: {exames.get('glicemia_jejum_mg_dL', 'Não informado')} mg/dL
+• HbA1c: {exames.get('hba1c_percent', 'Não informado')}%
+• Creatinina: {exames.get('creatinina_mg_dL', 'Não informado')} mg/dL
+• Proteinúria: {'Positiva' if exames.get('proteinuria_positiva', False) else 'Negativa'}
+• Diagnóstico de apneia do sono: {'Sim' if exames.get('diagnostico_apneia_sono', False) else 'Não'}
+• Cortisol sérico: {exames.get('cortisol_serico_ug_dL', 'Não informado')} μg/dL
+• Mutação genética para hipertensão: {'Sim' if exames.get('mutacao_genetica_hipertensao', False) else 'Não'}
+• BPM em repouso: {exames.get('bpm_repouso', 'Não informado')}
+• Índice PM2.5: {exames.get('indice_pm25', 'Não informado')}
+"""
             else:
                 prompt += "Não foram fornecidos exames laboratoriais.\n"
 
             prompt += f"""
 
-    INSTRUÇÕES PARA AVALIAÇÃO:
-    =========================
+INSTRUÇÕES PARA AVALIAÇÃO:
+=========================
 
-    1. Analise todos os fatores de risco para hipertensão presentes nos dados
-    2. Calcule uma pontuação de risco baseada em evidências científicas em uma escala de 0 a 100
-    3. Classifique o risco como: BAIXO, MODERADO, ALTO ou MUITO ALTO
-    4. Forneça recomendações específicas baseadas no perfil do paciente
+1. Analise todos os fatores de risco para hipertensão presentes nos dados
+2. Calcule uma pontuação de risco baseada em evidências científicas em uma escala de 0 a 100
+3. Classifique o risco como: BAIXO, MODERADO, ALTO ou MUITO ALTO
+4. Forneça recomendações específicas baseadas no perfil do paciente
 
-    FORMATO DE RESPOSTA OBRIGATÓRIO:
-    ===============================
+FORMATO DE RESPOSTA OBRIGATÓRIO:
+===============================
 
-    🏥 RELATÓRIO DE AVALIAÇÃO DE RISCO DE HIPERTENSÃO
+🏥 RELATÓRIO DE AVALIAÇÃO DE RISCO DE HIPERTENSÃO
 
-    📊 PONTUAÇÃO DE RISCO: [pontuação] pontos
-    🎯 NÍVEL DE RISCO: [BAIXO/MODERADO/ALTO/MUITO ALTO]
+📊 PONTUAÇÃO DE RISCO: [pontuação] pontos
+🎯 NÍVEL DE RISCO: [BAIXO/MODERADO/ALTO/MUITO ALTO]
 
-    ⚠️ FATORES DE RISCO IDENTIFICADOS:
-    [Liste numericamente cada fator de risco encontrado, um por linha]
+⚠️ FATORES DE RISCO IDENTIFICADOS:
+[Liste numericamente cada fator de risco encontrado, um por linha]
 
-    💡 RECOMENDAÇÕES:
-    [Recomendações específicas baseadas no perfil do paciente]
+💡 RECOMENDAÇÕES:
+[Recomendações específicas baseadas no perfil do paciente]
 
-    📝 ORIENTAÇÕES GERAIS:
-    • Manter pressão arterial abaixo de 120/80 mmHg
-    • Praticar exercícios regulares (mínimo 150min/semana)
-    • Manter dieta rica em frutas, vegetais e pobre em sódio
-    • Controlar peso corporal (IMC < 25)
-    • Evitar tabagismo e consumo excessivo de álcool
-    • Gerenciar níveis de estresse
-    • Manter qualidade adequada do sono
+📝 ORIENTAÇÕES GERAIS:
+• Manter pressão arterial abaixo de 120/80 mmHg
+• Praticar exercícios regulares (mínimo 150min/semana)
+• Manter dieta rica em frutas, vegetais e pobre em sódio
+• Controlar peso corporal (IMC < 25)
+• Evitar tabagismo e consumo excessivo de álcool
+• Gerenciar níveis de estresse
+• Manter qualidade adequada do sono
 
-    ⏰ Data da Avaliação: {datetime.now().strftime('%d/%m/%Y %H:%M')}
+⏰ Data da Avaliação: {datetime.now().strftime('%d/%m/%Y %H:%M')}
 
-    IMPORTANTE: Esta avaliação é apenas informativa. 
-    Consulte sempre um médico para diagnóstico e tratamento adequados.
+IMPORTANTE: Esta avaliação é apenas informativa. 
+Consulte sempre um médico para diagnóstico e tratamento adequados.
 
-    RESPONDA APENAS COM O RELATÓRIO NO FORMATO ESPECIFICADO ACIMA.
-    """
+RESPONDA APENAS COM O RELATÓRIO NO FORMATO ESPECIFICADO ACIMA.
+"""
 
             # Envia prompt para Gemini
             response = chat.send_message(prompt)
@@ -811,7 +942,6 @@ Consulte sempre um médico para diagnóstico e tratamento adequados.
             # Fallback para simulação local em caso de erro
             print(f"Erro na avaliação com Gemini: {e}")
             return "Erro ao avaliar com Gemini. Contate os administradores."
-            #return self.simulate_ai_assessment(data)  # usa sua função original como backup
 
     def salvar_relatorio(self):
         """Salva relatório no banco de dados (apenas médicos)"""
@@ -885,4 +1015,3 @@ Consulte sempre um médico para diagnóstico e tratamento adequados.
                 "Erro", 
                 f"Erro ao gerar laudo:\n{str(e)}"
             )
-
