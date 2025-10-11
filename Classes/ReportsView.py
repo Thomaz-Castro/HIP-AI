@@ -15,11 +15,11 @@ class ReportsView(QWidget):
         super().__init__()
         self.db_manager = db_manager
         self.user = user
-        self.all_reports = []  # Cache de todos os relatórios
+        self.all_reports = []
         self.init_ui()
 
     def init_ui(self):
-        # Estilo moderno (mantido igual ao original)
+        # Estilo moderno
         self.setStyleSheet("""
             QWidget {
                 background-color: #f5f7fa;
@@ -255,8 +255,6 @@ class ReportsView(QWidget):
         search_layout.addWidget(self.search_input)
         filters_grid.addLayout(search_layout)
 
-        # --- ALTERAÇÃO 1: REMOVIDA A CONDIÇÃO `if self.user["user_type"] != "patient":` ---
-        # Agora os filtros de período são criados para TODOS os usuários.
         
         # Filtro por período
         period_layout = QVBoxLayout()
@@ -358,14 +356,11 @@ class ReportsView(QWidget):
         """Limpa todos os filtros"""
         self.search_input.clear()
         
-        # --- ALTERAÇÃO 2: REMOVIDA A CONDIÇÃO `if self.user["user_type"] != "patient":` ---
-        # A limpeza dos filtros de data agora funciona para todos.
         self.period_combo.setCurrentIndex(0)
         self.date_from.setDate(QDate.currentDate().addMonths(-1))
         self.date_to.setDate(QDate.currentDate())
         
-        # O apply_filters() já é chamado implicitamente pela mudança no ComboBox.
-        # Mas para garantir, podemos chamar explicitamente.
+
         self.apply_filters()
 
     def load_reports(self):
@@ -428,8 +423,6 @@ class ReportsView(QWidget):
                     or search_text in r.get("doctor", {}).get("name", "").lower()
                 ]
 
-        # --- ALTERAÇÃO 3: REMOVIDA A CONDIÇÃO `if self.user["user_type"] != "patient":` ---
-        # A lógica de filtro por período agora é aplicada a TODOS os usuários.
         period = self.period_combo.currentText()
         now = datetime.now()
         
