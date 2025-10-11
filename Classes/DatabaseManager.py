@@ -145,28 +145,74 @@ class DatabaseManager:
         return list(self.db.reports.find({"patient_id": ObjectId(patient_id)}))
 
     def get_all_reports(self):
+        """Busca todos os relatórios, populando os dados do médico e do paciente.
+        
+        Mantém os relatórios mesmo que o médico ou paciente associado não seja encontrado,
+        fornecendo um valor padrão nesses casos.
+        """
         pipeline = [
+            # 1. Busca o documento do médico correspondente
             {
                 "$lookup": {
                     "from": "users",
                     "localField": "doctor_id",
                     "foreignField": "_id",
-                    "as": "doctor"
+                    "as": "doctor_info" # Usar um nome diferente para evitar conflito
                 }
             },
+            # 2. Busca o documento do paciente correspondente
             {
                 "$lookup": {
                     "from": "users",
                     "localField": "patient_id",
                     "foreignField": "_id",
-                    "as": "patient"
+                    "as": "patient_info" # Usar um nome diferente para evitar conflito
                 }
             },
+            # 3. Substitui o array do médico pelo primeiro objeto ou um valor padrão
             {
-                "$unwind": "$doctor"
+                "$addFields": {
+                    "doctor": {
+                        "$ifNull": [
+                            { "$arrayElemAt": ["$doctor_info", 0] },
+                            { "name": "Médico não encontrado" } # Objeto padrão
+                        ]
+                    }
+                }
             },
+            # 4. Substitui o array do paciente pelo primeiro objeto ou um valor padrão
             {
-                "$unwind": "$patient"
+                "$addFields": {
+                    "patient": {
+                        "$ifNull": [
+                            { "$arrayElemAt": ["$patient_info", 0] },
+                            { "name": "Paciente não encontrado" } # Objeto padrão
+                        ]
+                    }
+                }
+            },
+            # 5. Remove os campos temporários que usamos no lookup
+            {
+                "$project": {
+                    "doctor_info": 0,
+                    "patient_info": 0
+                }
             }
         ]
         return list(self.db.reports.aggregate(pipeline))
+
+    def get_doctor_reports(self, doctor_id):
+        """Busca todos os relatórios criados por um médico específico."""
+        reports_cursor = self.db.reports.find({"doctor_id": doctor_id})
+        reports_list = []
+        
+        # É importante popular os dados do paciente e do médico para a tabela funcionar
+        for report in reports_cursor:
+            patient = self.db.users.find_one({"_id": report["patient_id"]})
+            doctor = self.db.users.find_one({"_id": report["doctor_id"]}) # O próprio médico
+            
+            report["patient"] = patient if patient else {"name": "Paciente não encontrado"}
+            report["doctor"] = doctor if doctor else {"name": "Médico não encontrado"}
+            reports_list.append(report)
+            
+        return reports_list
