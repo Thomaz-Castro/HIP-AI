@@ -159,6 +159,8 @@ class MedicalReportGenerator:
         y_pos -= 2 * mm
         y_pos = self.draw_section_header("EXAMES LABORATORIAIS E CLÍNICOS", y_pos)
         e = data.get('exames', {})
+        if e == None:
+            e = {}
 
         y_pos = self.draw_field_row(y_pos, [
             {'label': 'LDL', 'value': f"{e.get('colesterol_ldl_mg_dL', '')} mg/dL"},
@@ -213,9 +215,15 @@ class MedicalReportGenerator:
 
         self.c.save()
         print(f"PDF gerado com sucesso: {self.filename}")
+        return self.filename
 
 # --- EXEMPLO DE USO ---
 if __name__ == '__main__':
+
+
+
+
+
     data = {
         'avaliacaoagil': {
             'idade_anos': 55, 'sexo_masculino': True, 'historico_familiar_hipertensao': True,
@@ -224,10 +232,7 @@ if __name__ == '__main__':
             'nivel_estresse_0_10': 7, 'sono_qualidade_ruim': True
         },
         'exames': {
-            'colesterol_ldl_mg_dL': 145, 'colesterol_hdl_mg_dL': 42, 'triglicerideos_mg_dL': 180,
-            'glicemia_jejum_mg_dL': 105, 'hba1c_percent': 5.8, 'creatinina_mg_dL': 1.1,
-            'proteinuria_positiva': False, 'diagnostico_apneia_sono': True, 'cortisol_serico_ug_dL': 18,
-            'mutacao_genetica_hipertensao': False, 'bpm_repouso': 75, 'indice_pm25': 35
+            
         },
         'ai_result': """RELATÓRIO DE AVALIAÇÃO DE RISCO DE HIPERTENSÃO
 
