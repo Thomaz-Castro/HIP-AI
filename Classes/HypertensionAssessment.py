@@ -11,7 +11,7 @@ from PyQt5.QtCore import Qt
 import os
 from google import genai
 from google.genai import types
-from Classes.pdfGen import MedicalReportGenerator
+from Classes.MedicalReportPDFWriter import MedicalReportPDFWriter
 
 class HypertensionAssessment(QWidget):
     def __init__(self, db_manager, user):
@@ -999,19 +999,22 @@ RESPONDA APENAS COM O RELATÓRIO NO FORMATO ESPECIFICADO ACIMA.
             if self.user["user_type"] == "doctor" and self.patient_combo.currentData():
                 patient_name = self.patient_combo.currentText()
             
-            # Gera o PDF
-            generator = MedicalReportGenerator()
+            # Gera o PDF (agora com diálogo de salvamento)
+            generator = MedicalReportPDFWriter()
             filename = generator.generate_pdf(data, user_info, patient_name)
         
-            QMessageBox.information(
-                self, 
-                "Laudo Gerado", 
-                f"Laudo médico oficial gerado com sucesso:\n{filename}"
-            )
+            # Verifica se o usuário não cancelou
+            if filename:
+                QMessageBox.information(
+                    self, 
+                    "✅ Laudo Gerado", 
+                    f"Laudo médico oficial gerado com sucesso!\n\n📁 Salvo em:\n{filename}"
+                )
+            # Se filename for None, usuário cancelou - não mostra nada
             
         except Exception as e:
             QMessageBox.critical(
                 self, 
-                "Erro", 
-                f"Erro ao gerar laudo:\n{str(e)}"
+                "❌ Erro", 
+                f"Erro ao gerar laudo:\n\n{str(e)}"
             )

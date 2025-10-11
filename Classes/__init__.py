@@ -7,7 +7,7 @@ from .DatabaseManager import DatabaseManager
 from .LoginWindow import LoginWindow
 from .MainWindow import MainWindow
 from .PatientProfile import PatientProfile
-from .pdfGen import MedicalReportGenerator
+from .MedicalReportPDFWriter import MedicalReportPDFWriter
 from .ReportsView import ReportsView
 from .ReportviewDialog import ReportViewDialog
 from .UserDialog import UserDialog
