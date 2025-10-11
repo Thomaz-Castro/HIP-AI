@@ -3,6 +3,7 @@ from datetime import datetime, date
 import pymongo
 from pymongo import MongoClient
 from bson.objectid import ObjectId
+from bson.errors import InvalidId
 import os
 
 class DatabaseManager:
@@ -80,10 +81,10 @@ class DatabaseManager:
                 "created_at": datetime.now()
             }
             if additional_data:
+                # Converte date para datetime se necessário
                 for key, value in additional_data.items():
                     if isinstance(value, date) and not isinstance(value, datetime):
-                        additional_data[key] = datetime.combine(
-                            value, datetime.min.time())
+                        additional_data[key] = datetime.combine(value, datetime.min.time())
                 user_data.update(additional_data)
 
             result = self.db.users.insert_one(user_data)
@@ -96,12 +97,28 @@ class DatabaseManager:
 
     def update_user(self, user_id, data):
         try:
+            # Validação básica para evitar erros comuns
+            if not isinstance(data, dict) or not data:
+                return False
+
+            # Converte date para datetime se necessário
+            for key, value in data.items():
+                if isinstance(value, date) and not isinstance(value, datetime):
+                    data[key] = datetime.combine(value, datetime.min.time())
+                    print(f"DEBUG: Convertido '{key}' de date para datetime")
+
             result = self.db.users.update_one(
                 {"_id": ObjectId(user_id)},
                 {"$set": data}
             )
-            return result.modified_count > 0
-        except:
+            
+            return result.matched_count > 0
+
+        except InvalidId:
+            return False
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
             return False
 
     def delete_user(self, user_id):
