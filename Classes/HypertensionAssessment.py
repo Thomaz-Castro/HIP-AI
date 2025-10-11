@@ -846,7 +846,6 @@ Consulte sempre um médico para diagnóstico e tratamento adequados.
     def gerar_pdf(self):
         """Método para gerar PDF no estilo oficial preto e branco"""
         if not self.last_assessment:
-            from PyQt6.QtWidgets import QMessageBox
             QMessageBox.warning(self, "Erro", "Realize uma avaliação primeiro!")
             return
         
@@ -872,8 +871,7 @@ Consulte sempre um médico para diagnóstico e tratamento adequados.
             # Gera o PDF
             generator = MedicalReportGenerator()
             filename = generator.generate_pdf(data, user_info, patient_name)
-            
-            from PyQt6.QtWidgets import QMessageBox
+        
             QMessageBox.information(
                 self, 
                 "Laudo Gerado", 
@@ -881,7 +879,6 @@ Consulte sempre um médico para diagnóstico e tratamento adequados.
             )
             
         except Exception as e:
-            from PyQt6.QtWidgets import QMessageBox
             QMessageBox.critical(
                 self, 
                 "Erro", 
