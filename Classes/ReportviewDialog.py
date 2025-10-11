@@ -1,10 +1,10 @@
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTextEdit, QDialog, QGroupBox, QGridLayout,
-    QScrollArea, QWidget, QFrame
+    QScrollArea, QWidget, QMessageBox
 )
-from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
+from Classes.MedicalReportPDFWriter import MedicalReportPDFWriter
 
 class ReportViewDialog(QDialog):
     def __init__(self, report):
@@ -164,10 +164,29 @@ class ReportViewDialog(QDialog):
         scroll.setWidget(content_widget)
         main_layout.addWidget(scroll)
 
-        # Botão fechar
+        # Botões na parte inferior
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
         
+        # Botão gerar PDF
+        pdf_btn = QPushButton("📄 Gerar PDF")
+        pdf_btn.clicked.connect(self.gerar_pdf)
+        pdf_btn.setMinimumHeight(45)
+        pdf_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #e74c3c, stop: 1 #c0392b);
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #ec7063, stop: 1 #e74c3c);
+            }
+        """)
+        btn_layout.addWidget(pdf_btn)
+        
+        btn_layout.addSpacing(15)
+        
+        # Botão fechar
         close_btn = QPushButton("✖ Fechar")
         close_btn.clicked.connect(self.accept)
         close_btn.setMinimumHeight(45)
@@ -391,3 +410,46 @@ class ReportViewDialog(QDialog):
         label.setProperty("class", "field-value")
         label.setWordWrap(True)
         return label
+    
+    def gerar_pdf(self):
+        """Gera PDF do relatório"""
+        try:
+            # Extrai dados do relatório
+            report_data = self.report["report_data"]
+            input_data = report_data.get("input_data", {})
+            
+            # Prepara dados para o gerador de PDF
+            data = {
+                "avaliacaoagil": input_data.get("autoavaliacao") or input_data.get("avaliacaoagil"),
+                "exames": input_data.get("exames"),
+                "ai_result": report_data.get("ai_result", "")
+            }
+            
+            # Informações do médico
+            user_info = {
+                "name": self.report.get("doctor", {}).get("name", "N/A"),
+                "user_type": "doctor"
+            }
+            
+            # Nome do paciente
+            patient_name = self.report.get("patient", {}).get("name", None)
+            
+            # Gera o PDF (agora com diálogo de salvamento)
+            generator = MedicalReportPDFWriter()
+            filename = generator.generate_pdf(data, user_info, patient_name)
+            
+            # Verifica se o usuário não cancelou
+            if filename:
+                QMessageBox.information(
+                    self,
+                    "✅ PDF Gerado",
+                    f"Laudo médico oficial gerado com sucesso!\n\n📁 Salvo em:\n{filename}"
+                )
+            # Se filename for None, usuário cancelou - não mostra nada
+            
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "❌ Erro",
+                f"Erro ao gerar PDF:\n\n{str(e)}"
+            )
