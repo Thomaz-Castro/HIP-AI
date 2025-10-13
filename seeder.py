@@ -83,7 +83,6 @@ def seed_database():
             "additional_data": {
                 "crm": "67890-SP",
                 "specialty": "Clínica Geral",
-                "phone": "(11) 98765-4322"
             }
         },
         {
@@ -94,7 +93,6 @@ def seed_database():
             "additional_data": {
                 "crm": "54321-RJ",
                 "specialty": "Cardiologia",
-                "phone": "(21) 98765-4323"
             }
         },
         {
@@ -105,7 +103,6 @@ def seed_database():
             "additional_data": {
                 "crm": "98765-SP",
                 "specialty": "Endocrinologia",
-                "phone": "(11) 98765-4324"
             }
         }
     ]
@@ -136,10 +133,8 @@ def seed_database():
             "password": "paciente123",
             "user_type": "patient",
             "additional_data": {
-                "cpf": "123.456.789-00",
                 "birth_date": date(1980, 5, 15),
                 "phone": "(11) 91234-5678",
-                "address": "Rua das Flores, 123 - São Paulo/SP"
             }
         },
         {
@@ -148,10 +143,8 @@ def seed_database():
             "password": "paciente123",
             "user_type": "patient",
             "additional_data": {
-                "cpf": "234.567.890-11",
                 "birth_date": date(1975, 8, 20),
                 "phone": "(11) 91234-5679",
-                "address": "Av. Paulista, 456 - São Paulo/SP"
             }
         },
         {
@@ -160,10 +153,8 @@ def seed_database():
             "password": "paciente123",
             "user_type": "patient",
             "additional_data": {
-                "cpf": "345.678.901-22",
                 "birth_date": date(1990, 3, 10),
                 "phone": "(11) 91234-5680",
-                "address": "Rua Augusta, 789 - São Paulo/SP"
             }
         },
         {
@@ -172,10 +163,8 @@ def seed_database():
             "password": "paciente123",
             "user_type": "patient",
             "additional_data": {
-                "cpf": "456.789.012-33",
                 "birth_date": date(1985, 12, 5),
                 "phone": "(21) 91234-5681",
-                "address": "Rua Copacabana, 321 - Rio de Janeiro/RJ"
             }
         },
         {
@@ -184,10 +173,8 @@ def seed_database():
             "password": "paciente123",
             "user_type": "patient",
             "additional_data": {
-                "cpf": "567.890.123-44",
                 "birth_date": date(1970, 7, 25),
                 "phone": "(11) 91234-5682",
-                "address": "Rua Oscar Freire, 654 - São Paulo/SP"
             }
         },
         {
@@ -196,10 +183,8 @@ def seed_database():
             "password": "paciente123",
             "user_type": "patient",
             "additional_data": {
-                "cpf": "678.901.234-55",
                 "birth_date": date(1995, 2, 14),
                 "phone": "(11) 91234-5683",
-                "address": "Rua Consolação, 987 - São Paulo/SP"
             }
         },
         {
@@ -208,10 +193,8 @@ def seed_database():
             "password": "paciente123",
             "user_type": "patient",
             "additional_data": {
-                "cpf": "789.012.345-66",
                 "birth_date": date(1988, 11, 30),
                 "phone": "(21) 91234-5684",
-                "address": "Av. Atlântica, 147 - Rio de Janeiro/RJ"
             }
         },
         {
@@ -220,10 +203,8 @@ def seed_database():
             "password": "paciente123",
             "user_type": "patient",
             "additional_data": {
-                "cpf": "890.123.456-77",
                 "birth_date": date(1992, 4, 18),
                 "phone": "(11) 91234-5685",
-                "address": "Rua Haddock Lobo, 258 - São Paulo/SP"
             }
         }
     ]
