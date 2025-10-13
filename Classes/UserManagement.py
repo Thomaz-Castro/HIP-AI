@@ -38,12 +38,13 @@ class UserManagement(QWidget):
             QTabBar::tab {
                 background: #ecf0f1;
                 color: #2c3e50;
-                padding: 12px 24px;
+                padding: 12px 35px;
                 margin-right: 4px;
                 border-top-left-radius: 8px;
                 border-top-right-radius: 8px;
                 font-weight: bold;
                 font-size: 11pt;
+                min-width: 180px;
             }
             
             QTabBar::tab:selected {
@@ -170,6 +171,11 @@ class UserManagement(QWidget):
             self.tabs.addTab(self.admins_tab, "🔑 Administradores")
             self.tabs.addTab(self.doctors_tab, "👨‍⚕️ Médicos")
             self.tabs.addTab(self.patients_tab, "👤 Pacientes")
+
+            # Configurar fonte que suporta emojis
+            emoji_font = QFont("Segoe UI Emoji", 11)
+            for i in range(self.tabs.count()):
+                self.tabs.tabBar().setFont(emoji_font)
 
         layout.addWidget(self.tabs)
         self.setLayout(layout)
