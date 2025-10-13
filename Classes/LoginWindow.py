@@ -64,10 +64,11 @@ class LoginWindow(QDialog):
         title = QLabel("🏥 Sistema Médico")
         title.setAlignment(Qt.AlignCenter)
         title.setFont(QFont("", 24, QFont.Bold))
+        title.setStyleSheet("font-size: 32px;")
         layout.addWidget(title)
 
         # Formulário de login
-        login_group = QGroupBox("Login")
+        login_group = QGroupBox()
         form_layout = QFormLayout()
 
         self.email_input = QLineEdit()
@@ -88,10 +89,10 @@ class LoginWindow(QDialog):
         layout.addWidget(self.login_btn)
 
         # Info do admin
-        info_label = QLabel("👨‍💼 Admin padrão: admin@sistema.com / admin123")
-        info_label.setAlignment(Qt.AlignCenter)
-        info_label.setStyleSheet("font-size: 12px; margin-top: 20px;")
-        layout.addWidget(info_label)
+        # info_label = QLabel("👨‍💼 Admin padrão: admin@sistema.com / admin123")
+        # info_label.setAlignment(Qt.AlignCenter)
+        # info_label.setStyleSheet("font-size: 12px; margin-top: 20px;")
+        # layout.addWidget(info_label)
 
         self.setLayout(layout)
 
