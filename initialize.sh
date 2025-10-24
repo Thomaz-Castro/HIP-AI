@@ -1,5 +1,5 @@
 #!/bin/bash
-
+ 
 # Move para o diretório onde o script está localizado para garantir
 # que todos os caminhos relativos (.venv, .env, etc.) funcionem.
 cd "$(dirname "$0")"
@@ -26,10 +26,16 @@ echo ""
 
 
 # --- 2 & 3. VERIFICAÇÃO E VALIDAÇÃO DO .ENV ---
-# (O código do seu .env deve estar aqui)
 echo "[INFO] Verificando arquivo de configuração (.env)..."
 if [ ! -f ".env" ]; then
     echo "[AVISO] O arquivo .env não foi encontrado! Criando a partir de .env.example..."
+    # Garante que .env.example exista antes de copiar
+    if [ ! -f ".env.example" ]; then
+        echo "[ERRO] O arquivo .env.example também não foi encontrado!"
+        echo "[INFO] Não é possível continuar sem um arquivo de configuração de exemplo."
+        read -p "Pressione [Enter] para sair..."
+        exit 1
+    fi
     cp .env.example .env
     echo "[OK] Arquivo .env criado."
     echo "[AVISO] O script será encerrado. Configure suas credenciais no arquivo .env e execute novamente."
@@ -38,14 +44,16 @@ if [ ! -f ".env" ]; then
 fi
 echo "[OK] Arquivo .env encontrado."
 echo ""
+
 echo "[INFO] Verificando credenciais no .env..."
-if grep -q "mongodb+srv://username:password@cluster.mongodb.net/medical_system?retryWrites=true&w=majority" ".env" || ! grep -qE "^GEMINI_API_KEY=.*[A-Za-z0-9]" ".env"; then
-    echo "[ERRO] As credenciais no arquivo .env parecem ser as padrões ou estão incompletas."
-    echo "[INFO] Por favor, abra o arquivo .env e configure a URI do MongoDB e a GEMINI_API_KEY."
+if grep -qE "^GEMINI_API_KEY=$" ".env" || grep -qE "^POSTGRES_PASSWORD=$" ".env"; then
+    echo "[ERRO] Credenciais de segurança não configuradas no arquivo .env."
+    echo "[INFO] Por favor, abra o arquivo .env e configure sua GEMINI_API_KEY e seu POSTGRES_PASSWORD."
+    echo "[INFO] Esses campos não podem ficar vazios."
     read -p "Pressione [Enter] para sair..."
     exit 1
 fi
-echo "[OK] Conteúdo do .env parece válido."
+echo "[OK] Credenciais de segurança parecem estar preenchidas."
 echo ""
 
 
