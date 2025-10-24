@@ -571,36 +571,43 @@ class HypertensionAssessment(QWidget):
     def load_initial_data(self):
         """Carrega dados iniciais baseado no usuário ou paciente selecionado"""
         patient_id = None
+        patient_data = None
         
         # Define qual paciente buscar
         if self.user["user_type"] == "patient":
             patient_id = self.user["id"]
             patient_data = self.user
+        
         elif self.user["user_type"] == "doctor" and hasattr(self, 'patient_combo'):
-            patient_id = self.patient_combo.currentData()
+            patient_id = self.patient_combo.currentData() 
             if patient_id:
-                patient_data = self.db_manager.db.users.find_one({"id": patient_id})
+                patient_data = self.db_manager.get_user_by_id(patient_id)
             else:
+                self.clear_form_fields()
+                self.idade.clear()
                 return
         else:
             return
         
         # Calcula e exibe idade
-        if patient_data and "birth_date" in patient_data:
+        if patient_data and "birth_date" in patient_data and patient_data["birth_date"]:
             age = self.calculate_age(patient_data["birth_date"])
             self.idade.setText(f"{age} anos")
         else:
-            self.idade.clear()
+            self.idade.setText("Idade N/A")
         
         # Busca último relatório do paciente
         if patient_id:
+            self.clear_form_fields() 
+            
             last_report = self.db_manager.get_latest_patient_report(patient_id)
             
             if last_report and "report_data" in last_report:
                 report_data = last_report["report_data"]
+                # O seu JSON de relatório salva em 'input_data'
                 input_data = report_data.get("input_data", {})
                 
-                # Verifica se existe autoavaliacao ou avaliacaoagil
+                # 'avaliacaoagil' era o nome antigo no seu JSON salvo
                 auto = input_data.get("autoavaliacao") or input_data.get("avaliacaoagil")
                 
                 if auto:
@@ -619,14 +626,7 @@ class HypertensionAssessment(QWidget):
                     self.alcool.setValue(auto.get("bebidas_alcoolicas_semana", 0))
                     self.estresse.setValue(auto.get("nivel_estresse_0_10", 0))
                     self.sono.setChecked(auto.get("sono_qualidade_ruim", False))
-                else:
-                    # Se não há dados no relatório, limpa os campos
-                    self.clear_form_fields()
-            else:
-                # Se não há relatórios anteriores, limpa os campos
-                self.clear_form_fields()
-                
-        # Não preenche exames médicos - eles devem ser inseridos a cada avaliação
+            
 
     def calcular_imc(self):
         h = self.altura.value() / 100
