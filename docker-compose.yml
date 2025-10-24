@@ -1,0 +1,21 @@
+version: '3.8' # Especifica a versão da sintaxe do Compose
+
+services:
+  db:
+    image: postgres:latest # Usa a imagem oficial mais recente do Postgres
+    container_name: hip-ai
+    restart: always # Sempre reinicia o container se ele parar
+    
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      
+    ports:
+      - "5432:5432" # Mapeia a porta 5432 do seu PC para a 5432 do container
+      
+    volumes:
+      - postgres-data:/var/lib/postgresql # Armazena os dados do banco
+
+volumes:
+  postgres-data: # Declara o volume para persistir os dados
