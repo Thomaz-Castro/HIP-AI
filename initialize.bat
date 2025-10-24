@@ -37,6 +37,13 @@ set "user_choice="
 set /p "user_choice=Deseja criar um .env a partir do .env.example agora? (s/n): "
 
 if /i "%user_choice%"=="s" (
+    REM Verifica se o .env.example existe antes de copiar
+    if not exist ".env.example" (
+        echo [ERRO] O arquivo .env.example tambem nao foi encontrado!
+        echo [INFO] Nao e possivel continuar sem um arquivo de configuracao de exemplo.
+        pause
+        exit /b 1
+    )
     copy .env.example .env >nul
     echo [OK] Arquivo .env criado com sucesso!
     echo [INFO] O arquivo sera aberto para voce inserir suas credenciais.
@@ -59,26 +66,32 @@ goto :ask_create_env
 REM --- 3. VALIDACAO DO CONTEUDO DO .ENV ---
 echo [INFO] Verificando credenciais no .env...
 
-REM Verifica se as credenciais padrao do MongoDB foram alteradas
-findstr /c:"mongodb+srv://username:password@cluster.mongodb.net/medical_system?retryWrites=true&w=majority" ".env" >nul
+REM Verifica se GEMINI_API_KEY esta vazia (ex: "GEMINI_API_KEY=")
+findstr /r /c:"^GEMINI_API_KEY=$" ".env" >nul
 if %errorlevel% equ 0 (
-    echo [ERRO] Suas credenciais do MongoDB no .env ainda sao as padroes.
-    echo [INFO] Abra o arquivo .env e substitua a URI pelos seus dados reais.
-    pause
-    exit /b 1
+    goto :env_error_empty
 )
 
-REM Verifica se a GEMINI_API_KEY existe (aviso, nao erro)
-findstr /r /c:"^GEMINI_API_KEY=.*[A-Za-z0-9]" ".env" >nul
-if %errorlevel% neq 0 (
-    echo [AVISO] A variavel 'GEMINI_API_KEY' nao foi encontrada ou esta vazia no .env.
-    echo [INFO] Abra o arquivo .env e configure-a corretamente.
-    pause
-    exit /b 1
+REM Verifica se POSTGRES_PASSWORD esta vazio (ex: "POSTGRES_PASSWORD=")
+findstr /r /c:"^POSTGRES_PASSWORD=$" ".env" >nul
+if %errorlevel% equ 0 (
+    goto :env_error_empty
 )
-echo [OK] Conteudo do .env parece valido.
+
+echo [OK] Credenciais de seguranca parecem estar preenchidas.
 echo.
+goto :setup_venv
 
+
+:env_error_empty
+echo [ERRO] Credenciais de seguranca nao configuradas no arquivo .env.
+echo [INFO] Por favor, abra o arquivo .env e configure sua GEMINI_API_KEY e seu POSTGRES_PASSWORD.
+echo [INFO] Esses campos nao podem ficar vazios.
+pause
+exit /b 1
+
+
+:setup_venv
 REM --- 4. AMBIENTE VIRTUAL E DEPENDENCIAS ---
 if not exist ".venv\" (
     echo [INFO] Ambiente virtual nao encontrado. Criando .venv...
