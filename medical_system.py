@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import (
 )
 from dotenv import load_dotenv
 from Classes.LoginWindow import LoginWindow
-from Classes.DatabaseManager import DatabaseManager
+from Classes.DatabaseManager import DatabaseManager 
 
 # Carrega variáveis de ambiente
 load_dotenv()
@@ -17,14 +17,17 @@ def main():
         print("Iniciando Sistema Médico...")
 
         # Inicializa banco de dados
-        print("Conectando ao MongoDB...")
+        print("Conectando ao PostgreSQL...")
         db_manager = DatabaseManager()
-        if not db_manager.client:
+        
+        # 1. ERRO ESTAVA AQUI: Verifique 'connection_pool', não 'client'
+        if not db_manager.connection_pool: 
             QMessageBox.critical(
-                None, "Erro", "Não foi possível conectar ao MongoDB!")
+                None, "Erro", "Não foi possível conectar ao PostgreSQL!")
             return
 
-        print("Conexão MongoDB OK")
+        # 2. Apenas texto atualizado
+        print("Conexão PostgreSQL OK")
 
         # Mostra tela de login
         print("Abrindo tela de login...")
@@ -37,8 +40,8 @@ def main():
             print("Login aceito, executando aplicação principal...")
             # Login bem sucedido, a janela principal já foi aberta
             # Agora executa o loop principal da aplicação
-            app.exec_()
-            print("Aplicação encerrada normalmente")
+            app_result = app.exec_()
+            print(f"Aplicação encerrada com código: {app_result}")
         else:
             print("Login cancelado ou falhou")
 
@@ -50,6 +53,9 @@ def main():
         traceback.print_exc()
 
     finally:
+        # 3. Garante que o pool de conexões será fechado ao sair
+        if 'db_manager' in locals() and db_manager.connection_pool:
+            db_manager.close()
         print("Sistema encerrado.")
 
 

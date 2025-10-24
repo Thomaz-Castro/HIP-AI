@@ -298,7 +298,7 @@ class UserManagement(QWidget):
         
         for i, user in enumerate(users):
             # ID (oculto)
-            table.setItem(i, 0, QTableWidgetItem(str(user["_id"])))
+            table.setItem(i, 0, QTableWidgetItem(str(user["id"])))
             
             # Nome
             table.setItem(i, 1, QTableWidgetItem(user["name"]))
@@ -352,9 +352,9 @@ class UserManagement(QWidget):
                 self, "⚠️ Atenção", "Selecione um usuário para editar!")
             return
 
-        user_id = table.item(current_row, 0).text()
+        user_id_str = table.item(current_row, 0).text()
         
-        dialog = UserDialog(self.db_manager, user_type, user_id)
+        dialog = UserDialog(self.db_manager, user_type, int(user_id_str))
         if dialog.exec_():
             self.refresh_table(user_type)
 
@@ -367,11 +367,13 @@ class UserManagement(QWidget):
                 self, "⚠️ Atenção", "Selecione um usuário para excluir!")
             return
 
-        user_id = table.item(current_row, 0).text()
+        user_id_str = table.item(current_row, 0).text()
         user_name = table.item(current_row, 1).text()
+
+        user_id_int = int(user_id_str)
         
         # Não permite excluir o próprio usuário logado
-        if str(self.user["_id"]) == user_id:
+        if self.user["id"] == user_id_int:
             QMessageBox.warning(
                 self, "⚠️ Atenção", 
                 "Você não pode excluir seu próprio usuário!"
@@ -388,7 +390,7 @@ class UserManagement(QWidget):
         )
 
         if reply == QMessageBox.Yes:
-            if self.db_manager.delete_user(user_id):
+            if self.db_manager.delete_user(user_id_int):
                 QMessageBox.information(
                     self, "✅ Sucesso", "Usuário excluído com sucesso!")
                 self.refresh_table(user_type)
