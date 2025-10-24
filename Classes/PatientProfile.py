@@ -302,7 +302,7 @@ class PatientProfile(QWidget):
             "birth_date": self.birth_date_input.date().toPyDate()
         }
 
-        if self.db_manager.update_user(str(self.user["_id"]), update_data):
+        if self.db_manager.update_user(str(self.user["id"]), update_data):
             self.user.update(update_data)
             QMessageBox.information(self, "✅ Sucesso", "Perfil atualizado com sucesso!")
         else:
@@ -335,7 +335,7 @@ class PatientProfile(QWidget):
             return
 
         update_data = {"password": self.db_manager.hash_password(new_password)}
-        if self.db_manager.update_user(str(self.user["_id"]), update_data):
+        if self.db_manager.update_user(str(self.user["id"]), update_data):
             self.user["password"] = update_data["password"]
             QMessageBox.information(self, "✅ Sucesso", "Senha alterada com sucesso!")
             self.old_password_input.clear()

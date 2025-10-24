@@ -529,7 +529,7 @@ class HypertensionAssessment(QWidget):
         patients = self.db_manager.get_users_by_type("patient")
         self.patient_combo.clear()
         for patient in patients:
-            self.patient_combo.addItem(patient["name"], patient["_id"])
+            self.patient_combo.addItem(patient["name"], patient["id"])
     
     def on_patient_changed(self):
         """Chamado quando o paciente selecionado muda"""
@@ -574,12 +574,12 @@ class HypertensionAssessment(QWidget):
         
         # Define qual paciente buscar
         if self.user["user_type"] == "patient":
-            patient_id = self.user["_id"]
+            patient_id = self.user["id"]
             patient_data = self.user
         elif self.user["user_type"] == "doctor" and hasattr(self, 'patient_combo'):
             patient_id = self.patient_combo.currentData()
             if patient_id:
-                patient_data = self.db_manager.db.users.find_one({"_id": patient_id})
+                patient_data = self.db_manager.db.users.find_one({"id": patient_id})
             else:
                 return
         else:
@@ -962,7 +962,7 @@ RESPONDA APENAS COM O RELATÓRIO NO FORMATO ESPECIFICADO ACIMA.
 
         # Salva no banco
         report_id = self.db_manager.create_report(
-            self.user["_id"],
+            self.user["id"],
             patient_id,
             self.last_assessment
         )

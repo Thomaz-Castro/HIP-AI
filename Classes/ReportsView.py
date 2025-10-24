@@ -364,21 +364,21 @@ class ReportsView(QWidget):
         self.apply_filters()
 
     def load_reports(self):
-        """Carrega os relatórios do banco de dados com base no tipo de usuário."""
-        if self.user["user_type"] == "patient":
-            reports = self.db_manager.get_patient_reports(self.user["_id"])
-            self.all_reports = []
-            for report in reports:
-                doctor = self.db_manager.db.users.find_one({"_id": report["doctor_id"]})
-                report["doctor"] = doctor if doctor else {"name": "N/A"}
-                self.all_reports.append(report)
-        elif self.user["user_type"] == "doctor":
-            self.all_reports = self.db_manager.get_doctor_reports(self.user["_id"])
-        else:
-            self.all_reports = self.db_manager.get_all_reports()
+            """Carrega os relatórios do banco de dados com base no tipo de usuário."""
+            
+            if self.user["user_type"] == "patient":
+                # O método get_patient_reports já retorna o 'doctor' em JSON.
+                self.all_reports = self.db_manager.get_patient_reports(self.user["id"])
+            
+            elif self.user["user_type"] == "doctor":
+                # O método get_doctor_reports já retorna o 'patient' em JSON.
+                self.all_reports = self.db_manager.get_doctor_reports(self.user["id"])
+            
+            else: # admin
+                self.all_reports = self.db_manager.get_all_reports()
 
-        self.update_statistics()
-        self.apply_filters()
+            self.update_statistics()
+            self.apply_filters()
 
     def update_statistics(self):
         """Atualiza as estatísticas"""
