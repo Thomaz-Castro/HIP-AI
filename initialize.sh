@@ -1,7 +1,7 @@
 #!/bin/bash
  
 # Move para o diretório onde o script está localizado para garantir
-# que todos os caminhos relativos (.venv, .env, etc.) funcionem.
+# que todos os caminhos relativos (.venv, .env, docker-compose.yml etc.) funcionem.
 cd "$(dirname "$0")"
 
 # Limpa a tela
@@ -46,9 +46,18 @@ echo "[OK] Arquivo .env encontrado."
 echo ""
 
 echo "[INFO] Verificando credenciais no .env..."
-if grep -qE "^GEMINI_API_KEY=$" ".env" || grep -qE "^POSTGRES_PASSWORD=$" ".env"; then
-    echo "[ERRO] Credenciais de segurança não configuradas no arquivo .env."
-    echo "[INFO] Por favor, abra o arquivo .env e configure sua GEMINI_API_KEY e seu POSTGRES_PASSWORD."
+# --- MELHORIA: Verifica também as variáveis do Postgres ---
+if grep -qE "^GEMINI_API_KEY=$" ".env" || \
+   grep -qE "^POSTGRES_USER=$" ".env" || \
+   grep -qE "^POSTGRES_PASSWORD=$" ".env" || \
+   grep -qE "^POSTGRES_DB=$" ".env"; then
+    
+    echo "[ERRO] Variáveis essenciais não configuradas no arquivo .env."
+    echo "[INFO] Por favor, abra o .env e configure no mínimo:"
+    echo "       - GEMINI_API_KEY"
+    echo "       - POSTGRES_USER"
+    echo "       - POSTGRES_PASSWORD"
+    echo "       - POSTGRES_DB"
     echo "[INFO] Esses campos não podem ficar vazios."
     read -p "Pressione [Enter] para sair..."
     exit 1
@@ -97,7 +106,7 @@ fi
 echo "[OK] Dependências Python instaladas."
 echo ""
 
-# --- 5. VERIFICAÇÃO DE DEPENDÊNCIAS DO SISTEMA GRÁFICO (NOVO) ---
+# --- 5. VERIFICAÇÃO DE DEPENDÊNCIAS DO SISTEMA GRÁFICO ---
 QT_DEPS_FLAG=".qt_deps_installed"
 if [ ! -f "$QT_DEPS_FLAG" ]; then
     echo "[INFO] Verificando dependências do sistema para a interface gráfica..."
@@ -138,6 +147,81 @@ if [ ! -f "$QT_DEPS_FLAG" ]; then
     fi
     echo ""
 fi
+
+
+# --- 5.5. VERIFICAÇÃO DO DOCKER E BANCO DE DADOS (NOVO) ---
+echo "[INFO] Verificando se o Docker e o Docker Compose estão instalados..."
+
+# 1. Checa Docker
+if ! command -v docker &> /dev/null; then
+    echo "[ERRO] O comando 'docker' não foi encontrado no sistema!"
+    echo "[INFO] Por favor, instale o Docker (ex: 'sudo apt install docker.io')."
+    echo "[INFO] Lembre-se de iniciar o serviço: 'sudo systemctl start docker'"
+    echo "[INFO] E adicione seu usuário ao grupo docker: 'sudo usermod -aG docker $USER' (requer re-login)"
+    read -p "Pressione [Enter] para sair..."
+    exit 1
+fi
+
+# 2. Encontra o comando do Compose (v1 ou v2)
+COMPOSE_CMD=""
+if command -v docker-compose &> /dev/null; then
+    COMPOSE_CMD="docker-compose"
+elif docker compose version &> /dev/null; then
+    COMPOSE_CMD="docker compose"
+else
+    echo "[ERRO] 'docker-compose' (v1) ou 'docker compose' (v2) não foi encontrado!"
+    echo "[INFO] Por favor, instale o Docker Compose (ex: 'sudo apt install docker-compose')."
+    read -p "Pressione [Enter] para sair..."
+    exit 1
+fi
+echo "[OK] Docker e '$COMPOSE_CMD' encontrados."
+echo ""
+
+# 3. Verifica o status do container
+CONTAINER_NAME="hip-ai" # Definido no seu docker-compose.yml
+
+echo "[INFO] Verificando status do container do banco de dados: $CONTAINER_NAME"
+
+# Verifica se o container com nome exato (^) e ($) está com status "running"
+if docker ps -f "name=^/${CONTAINER_NAME}$" -f "status=running" --format "{{.Names}}" | grep -q "$CONTAINER_NAME"; then
+    echo "[OK] O container '$CONTAINER_NAME' já está em execução."
+else
+    echo "[AVISO] Container '$CONTAINER_NAME' não está em execução."
+    echo "[INFO] Tentando iniciar o banco de dados com '$COMPOSE_CMD up -d'..."
+    
+    # Verifica se o docker-compose.yml existe
+    if [ ! -f "docker-compose.yml" ]; then
+        echo "[ERRO] Arquivo 'docker-compose.yml' não encontrado neste diretório!"
+        read -p "Pressione [Enter] para sair..."
+        exit 1
+    fi
+
+    # Executa o docker-compose. Ele lerá o .env automaticamente.
+    $COMPOSE_CMD up -d
+    
+    if [ $? -ne 0 ]; then
+        echo "[ERRO] Falha ao executar '$COMPOSE_CMD up -d'!"
+        echo "[INFO] Verifique se o serviço Docker está rodando ('sudo systemctl status docker')."
+        echo "[INFO] Verifique se você tem permissão ('sudo usermod -aG docker $USER')."
+        echo "[INFO] Verifique os logs do Docker para mais detalhes."
+        read -p "Pressione [Enter] para sair..."
+        exit 1
+    fi
+    
+    echo "[INFO] Aguardando o banco de dados (Postgres) inicializar..."
+    sleep 8 # Dá um tempo (8s) para o Postgres ficar pronto para conexões
+    
+    # Verificação final
+    if docker ps -f "name=^/${CONTAINER_NAME}$" -f "status=running" --format "{{.Names}}" | grep -q "$CONTAINER_NAME"; then
+        echo "[OK] Container '$CONTAINER_NAME' iniciado com sucesso!"
+    else
+        echo "[ERRO] O container '$CONTAINER_NAME' falhou ao iniciar após o comando. Verifique os logs."
+        echo "[INFO] Tente: 'docker logs $CONTAINER_NAME' ou '$COMPOSE_CMD logs db'"
+        read -p "Pressione [Enter] para sair..."
+        exit 1
+    fi
+fi
+echo ""
 
 
 # --- 6. EXECUCAO DO SISTEMA ---
