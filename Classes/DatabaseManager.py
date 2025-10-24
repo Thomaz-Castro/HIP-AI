@@ -394,6 +394,22 @@ class DatabaseManager:
             cursor.close()
             self.return_connection(conn)
 
+    def get_user_by_id(self, user_id):
+        """Busca um usuário específico pelo seu ID."""
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+            user = cursor.fetchone()
+            # Retorna o dicionário diretamente ou None
+            return user 
+        except Exception as e:
+            print(f"❌ Erro ao buscar usuário por ID: {e}")
+            return None
+        finally:
+            cursor.close()
+            self.return_connection(conn)
+
     def close(self):
         """Fecha o pool de conexões"""
         if self.connection_pool:

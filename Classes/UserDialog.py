@@ -7,11 +7,6 @@ from PyQt5.QtCore import QDate, Qt, QRegExp
 from PyQt5.QtGui import QRegExpValidator
 import re
 
-try:
-    from bson.objectid import ObjectId
-except ImportError:
-    from bson import ObjectId
-
 
 class UserDialog(QDialog):
     def __init__(self, db_manager, user_type, user_id=None):
@@ -368,7 +363,9 @@ class UserDialog(QDialog):
 
     def load_user_data(self):
         """Carrega dados do usuário para edição"""
-        user = self.db_manager.db.users.find_one({"_id": ObjectId(self.user_id)})
+        
+        # self.user_id já é um inteiro vindo do UserManagement
+        user = self.db_manager.get_user_by_id(self.user_id)
         
         if user:
             self.name_input.setText(user["name"])
@@ -379,11 +376,10 @@ class UserDialog(QDialog):
                 self.specialty_input.setText(user.get("specialty", ""))
                 
             elif self.user_type == "patient":
-                if "birth_date" in user:
-                    birth_date = user["birth_date"]
-                    if birth_date:
-                        qdate = QDate(birth_date.year, birth_date.month, birth_date.day)
-                        self.birth_date_input.setDate(qdate)
+                birth_date = user.get("birth_date") 
+                if birth_date:
+                    qdate = QDate(birth_date.year, birth_date.month, birth_date.day)
+                    self.birth_date_input.setDate(qdate)
                 self.phone_input.setText(user.get("phone", ""))
 
     def save_user(self):
