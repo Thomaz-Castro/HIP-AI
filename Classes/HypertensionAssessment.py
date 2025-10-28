@@ -1,23 +1,90 @@
+import os
 from datetime import datetime
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QFormLayout, QGroupBox,
     QLabel, QSpinBox, QDoubleSpinBox, QCheckBox, QPushButton,
     QPlainTextEdit, QHBoxLayout, QLineEdit, QScrollArea,
-    QComboBox, QMessageBox,
-    QFrame
+    QMessageBox, QFrame, QDialog, QProgressBar
 )
 from PyQt5.QtGui import QFont
-from PyQt5.QtCore import Qt
-import os
+from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal
 from google import genai
 from google.genai import types
 from Classes.MedicalReportPDFWriter import MedicalReportPDFWriter
+
+# --- HELPER CLASSES PARA POPUP E THREADING ---
+
+class LoadingDialog(QDialog):
+    """
+    Popup de carregamento modal para operações demoradas.
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Processando...")
+        self.setModal(True)
+        # Impede o usuário de fechar o diálogo
+        self.setWindowFlags(Qt.Dialog | Qt.CustomizeWindowHint | Qt.WindowTitleHint) 
+        
+        layout = QVBoxLayout(self)
+        layout.setSpacing(15)
+        layout.setContentsMargins(20, 20, 20, 20)
+        
+        self.msg_label = QLabel("Enviando dados para análise da IA...")
+        self.msg_label.setFont(QFont("Segoe UI", 12))
+        self.msg_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.msg_label)
+        
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 0) # Modo indeterminado
+        self.progress_bar.setMinimumHeight(15)
+        layout.addWidget(self.progress_bar)
+        
+        self.gemini_label = QLabel("powered by google gemini")
+        self.gemini_label.setStyleSheet("font-size: 8pt; color: #7f8c8d;")
+        self.gemini_label.setAlignment(Qt.AlignRight)
+        layout.addWidget(self.gemini_label)
+        
+        self.setMinimumWidth(350)
+
+class AssessmentWorker(QObject):
+    """
+    Worker para executar a avaliação da IA em uma thread separada.
+    """
+    finished = pyqtSignal(str) # Emite o resultado (string)
+
+    def __init__(self, assessment_data, ai_function):
+        super().__init__()
+        self.assessment_data = assessment_data
+        self.ai_function = ai_function
+
+    def run(self):
+        """Executa a tarefa demorada"""
+        try:
+            resultado = self.ai_function(self.assessment_data)
+            self.finished.emit(resultado)
+        except Exception as e:
+            print(f"Erro no worker de avaliação: {e}")
+            self.finished.emit(f"Erro ao processar avaliação: {e}")
+
+# --- CLASSE PRINCIPAL DA TELA ---
 
 class HypertensionAssessment(QWidget):
     def __init__(self, db_manager, user):
         super().__init__()
         self.db_manager = db_manager
         self.user = user
+        
+        # Estado
+        self.selected_patient_id = None
+        self.last_assessment = None
+        self.last_assessment_report_id = None
+        self.current_assessment_data = None
+        
+        # Para o threading
+        self.thread = None
+        self.worker = None
+        self.loading_dialog = None
+        
         self.init_ui()
 
     def calculate_age(self, birth_date):
@@ -213,32 +280,43 @@ class HypertensionAssessment(QWidget):
         title_label.setAlignment(Qt.AlignCenter)
         content_layout.addWidget(title_label)
 
-        # Seleção de paciente (apenas para médicos)
+        # --- SELEÇÃO DE PACIENTE (Req 1) ---
         if self.user["user_type"] == "doctor":
             patient_group = QGroupBox("👤 Seleção de Paciente")
             patient_layout = QFormLayout()
             patient_layout.setSpacing(10)
             patient_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
-
-            self.patient_combo = QComboBox()
-            self.patient_combo.setMinimumHeight(35)
-            # Não conecta o sinal ainda - será feito após criar todos os campos
-            self.load_patients()
             
-            # Label personalizado para o paciente
-            patient_label = QLabel("Selecionar Paciente:")
-            patient_label.setStyleSheet("font-weight: bold; color: #34495e;")
+            # Layout de busca (CPF + Botão)
+            search_layout = QHBoxLayout()
+            search_layout.setSpacing(10)
             
-            patient_layout.addRow(patient_label, self.patient_combo)
+            self.cpf_input = QLineEdit()
+            self.cpf_input.setPlaceholderText("Digite o CPF (ex: 123.456.789-00)")
+            self.cpf_input.setMinimumHeight(35)
+            search_layout.addWidget(self.cpf_input, 3) # Input com 3/4 do espaço
+            
+            self.search_patient_btn = QPushButton("🔍 Buscar")
+            self.search_patient_btn.setMinimumHeight(35)
+            self.search_patient_btn.clicked.connect(self.search_patient_by_cpf)
+            search_layout.addWidget(self.search_patient_btn, 1) # Botão com 1/4
+            
+            patient_layout.addRow(self.create_bold_label("Buscar por CPF:"), search_layout)
+            
+            # Label para nome do paciente
+            self.patient_name_label = QLabel("Nenhum paciente selecionado")
+            self.patient_name_label.setStyleSheet("font-weight: bold; color: #7f8c8d; font-size: 11pt;")
+            patient_layout.addRow(self.create_bold_label("Paciente:"), self.patient_name_label)
+            
             patient_group.setLayout(patient_layout)
             content_layout.addWidget(patient_group)
 
-        # --- Avaliação Ágil ---
-        auto_gbox = QGroupBox("📝 Avaliação Ágil")
-        auto_form = QFormLayout()
-        auto_form.setSpacing(15)
-        auto_form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
-
+        # --- SUBDIVISÃO 1: DADOS DEMOGRÁFICOS (Req 2) ---
+        demo_gbox = QGroupBox("ℹ️ Dados Demográficos")
+        demo_form = QFormLayout()
+        demo_form.setSpacing(15)
+        demo_form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        
         # Idade (calculada, read-only)
         self.idade = QLineEdit()
         self.idade.setReadOnly(True)
@@ -250,20 +328,29 @@ class HypertensionAssessment(QWidget):
             }
         """)
         self.idade.setMinimumHeight(35)
-        self.idade.setPlaceholderText("Calculada automaticamente")
-        auto_form.addRow(self.create_bold_label("Idade:"), self.idade)
+        self.idade.setPlaceholderText("Selecione um paciente")
+        demo_form.addRow(self.create_bold_label("Idade:"), self.idade)
 
         self.sexo_m = QCheckBox("Masculino")
         self.sexo_m.setStyleSheet("QCheckBox { font-weight: bold; }")
-        auto_form.addRow(self.create_bold_label("Sexo:"), self.sexo_m)
+        demo_form.addRow(self.create_bold_label("Sexo:"), self.sexo_m)
 
         self.hist_fam = QCheckBox("Sim")
-        auto_form.addRow(self.create_bold_label("Histórico familiar de hipertensão:"), self.hist_fam)
+        demo_form.addRow(self.create_bold_label("Histórico familiar de hipertensão:"), self.hist_fam)
+        
+        demo_gbox.setLayout(demo_form)
+        content_layout.addWidget(demo_gbox)
+        
+        # --- SUBDIVISÃO 2: MEDIDAS FÍSICAS (Req 2) ---
+        measures_gbox = QGroupBox("📏 Medidas Físicas")
+        measures_form = QFormLayout()
+        measures_form.setSpacing(15)
+        measures_form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
 
-        # Medidas físicas
         measures_frame = QFrame()
         measures_layout = QHBoxLayout(measures_frame)
         measures_layout.setSpacing(10)
+        measures_layout.setContentsMargins(0,0,0,0)
         
         self.altura = QDoubleSpinBox()
         self.altura.setRange(50, 250)
@@ -294,45 +381,52 @@ class HypertensionAssessment(QWidget):
         measures_layout.addWidget(QLabel("IMC:"))
         measures_layout.addWidget(self.imc)
         
-        auto_form.addRow(self.create_bold_label("Medidas Físicas:"), measures_frame)
+        measures_form.addRow(measures_frame)
         
         self.altura.valueChanged.connect(self.calcular_imc)
         self.peso.valueChanged.connect(self.calcular_imc)
+        
+        measures_gbox.setLayout(measures_form)
+        content_layout.addWidget(measures_gbox)
 
-        # Hábitos alimentares e exercícios
+        # --- SUBDIVISÃO 3: ESTILO DE VIDA E HÁBITOS (Req 2) ---
+        habits_gbox = QGroupBox("🥗 Estilo de Vida e Hábitos")
+        habits_form = QFormLayout()
+        habits_form.setSpacing(15)
+        habits_form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+
         self.frutas = QSpinBox()
         self.frutas.setRange(0, 20)
         self.frutas.setSuffix(" porções/dia")
         self.frutas.setMinimumHeight(35)
-        auto_form.addRow(self.create_bold_label("Frutas/Vegetais por dia:"), self.frutas)
+        habits_form.addRow(self.create_bold_label("Frutas/Vegetais por dia:"), self.frutas)
 
         self.exercicio = QSpinBox()
         self.exercicio.setRange(0, 10000)
         self.exercicio.setSuffix(" min/semana")
         self.exercicio.setMinimumHeight(35)
-        auto_form.addRow(self.create_bold_label("Exercício por semana:"), self.exercicio)
+        habits_form.addRow(self.create_bold_label("Exercício por semana:"), self.exercicio)
 
-        # Vícios e estilo de vida
         self.fuma = QCheckBox("Sim")
-        auto_form.addRow(self.create_bold_label("Fumante:"), self.fuma)
+        habits_form.addRow(self.create_bold_label("Fumante:"), self.fuma)
 
         self.alcool = QSpinBox()
         self.alcool.setRange(0, 100)
         self.alcool.setSuffix(" doses/semana")
         self.alcool.setMinimumHeight(35)
-        auto_form.addRow(self.create_bold_label("Bebidas alcoólicas:"), self.alcool)
+        habits_form.addRow(self.create_bold_label("Bebidas alcoólicas:"), self.alcool)
 
         self.estresse = QSpinBox()
         self.estresse.setRange(0, 10)
         self.estresse.setSuffix(" (0=baixo, 10=alto)")
         self.estresse.setMinimumHeight(35)
-        auto_form.addRow(self.create_bold_label("Nível de estresse:"), self.estresse)
+        habits_form.addRow(self.create_bold_label("Nível de estresse:"), self.estresse)
 
         self.sono = QCheckBox("Sim")
-        auto_form.addRow(self.create_bold_label("Qualidade do sono ruim:"), self.sono)
+        habits_form.addRow(self.create_bold_label("Qualidade do sono ruim:"), self.sono)
 
-        auto_gbox.setLayout(auto_form)
-        content_layout.addWidget(auto_gbox)
+        habits_gbox.setLayout(habits_form)
+        content_layout.addWidget(habits_gbox)
 
         # --- Exames Médicos opcionais ---
         self.chk_exames = QCheckBox("🩺 Possui dados de exames médicos?")
@@ -367,6 +461,7 @@ class HypertensionAssessment(QWidget):
         # Colesterol
         cholesterol_frame = QFrame()
         cholesterol_layout = QHBoxLayout(cholesterol_frame)
+        cholesterol_layout.setContentsMargins(0,0,0,0)
         
         self.ldl = make_spin(500, " mg/dL")
         self.hdl = make_spin(200, " mg/dL")
@@ -384,6 +479,7 @@ class HypertensionAssessment(QWidget):
 
         glucose_frame = QFrame()
         glucose_layout = QHBoxLayout(glucose_frame)
+        glucose_layout.setContentsMargins(0,0,0,0)
         
         self.glic = make_spin(500, " mg/dL")
         self.hba1c = make_spin(20, " %")
@@ -414,6 +510,7 @@ class HypertensionAssessment(QWidget):
         # Parâmetros físicos
         vitals_frame = QFrame()
         vitals_layout = QHBoxLayout(vitals_frame)
+        vitals_layout.setContentsMargins(0,0,0,0)
         
         self.bpm = make_spin(200, " bpm", 0)
         self.pm25 = make_spin(500, " µg/m³")
@@ -450,14 +547,14 @@ class HypertensionAssessment(QWidget):
             self.btn_salvar = QPushButton("💾 Salvar Relatório")
             self.btn_salvar.setObjectName("btn_salvar")
             self.btn_salvar.clicked.connect(self.salvar_relatorio)
-            self.btn_salvar.setEnabled(False)
+            self.btn_salvar.setEnabled(False) # Habilitado após avaliar
             self.btn_salvar.setMinimumHeight(45)
             btns.addWidget(self.btn_salvar)
 
         self.btn_pdf = QPushButton("📄 Gerar PDF")
         self.btn_pdf.setObjectName("btn_pdf")
         self.btn_pdf.clicked.connect(self.gerar_pdf)
-        self.btn_pdf.setEnabled(False)
+        self.btn_pdf.setEnabled(False) # Habilitado após salvar
         self.btn_pdf.setMinimumHeight(45)
         btns.addWidget(self.btn_pdf)
         
@@ -509,14 +606,10 @@ class HypertensionAssessment(QWidget):
 
         # Oculta exames por padrão
         self.toggle_exames(0)
-        self.last_assessment = None
         
-        # Conecta o sinal do combo de pacientes APÓS criar todos os campos
-        if self.user["user_type"] == "doctor":
-            self.patient_combo.currentIndexChanged.connect(self.on_patient_changed)
-        
-        # Carrega dados iniciais
-        self.load_initial_data()
+        # Carrega dados iniciais (apenas se for paciente)
+        if self.user["user_type"] == "patient":
+            self.load_initial_data()
 
     def create_bold_label(self, text):
         """Cria um label com estilo em negrito"""
@@ -524,22 +617,39 @@ class HypertensionAssessment(QWidget):
         label.setStyleSheet("font-weight: bold; color: #34495e;")
         return label
 
-    def load_patients(self):
-        """Carrega pacientes no combo box"""
-        patients = self.db_manager.get_users_by_type("patient")
-        self.patient_combo.clear()
-        for patient in patients:
-            self.patient_combo.addItem(patient["name"], patient["id"])
-    
-    def on_patient_changed(self):
-        """Chamado quando o paciente selecionado muda"""
-        if self.user["user_type"] == "doctor":
+    def search_patient_by_cpf(self):
+        """Busca paciente por CPF no banco de dados"""
+        cpf = self.cpf_input.text()
+        if not cpf:
+            QMessageBox.warning(self, "Entrada inválida", "Por favor, digite um CPF.")
+            return
+
+        # Busca apenas pacientes ATIVOS pelo CPF
+        patient = self.db_manager.get_user_by_cpf(cpf, user_type='patient')
+        
+        if patient:
+            self.selected_patient_id = patient['id']
+            self.patient_name_label.setText(patient['name'])
+            self.patient_name_label.setStyleSheet("font-weight: bold; color: #27ae60; font-size: 11pt;") # Verde
+            
+            # Reseta os botões e resultados
+            self.last_assessment = None
+            self.last_assessment_report_id = None
+            self.btn_salvar.setEnabled(False)
+            self.btn_pdf.setEnabled(False)
+            self.result.clear()
+            
+            # Carrega os dados do paciente encontrado
             self.load_initial_data()
-    
+        else:
+            self.selected_patient_id = None
+            self.patient_name_label.setText("Paciente não encontrado ou inativo")
+            self.patient_name_label.setStyleSheet("font-weight: bold; color: #e74c3c; font-size: 11pt;") # Vermelho
+            self.clear_form_fields()
+            self.idade.clear()
+            
     def clear_form_fields(self):
         """Limpa todos os campos do formulário"""
-        # Idade permanece (calculada da data de nascimento)
-        
         # Campos de avaliação ágil
         self.sexo_m.setChecked(False)
         self.hist_fam.setChecked(False)
@@ -578,8 +688,8 @@ class HypertensionAssessment(QWidget):
             patient_id = self.user["id"]
             patient_data = self.user
         
-        elif self.user["user_type"] == "doctor" and hasattr(self, 'patient_combo'):
-            patient_id = self.patient_combo.currentData() 
+        elif self.user["user_type"] == "doctor":
+            patient_id = self.selected_patient_id # Usa o ID do paciente encontrado
             if patient_id:
                 patient_data = self.db_manager.get_user_by_id(patient_id)
             else:
@@ -604,10 +714,9 @@ class HypertensionAssessment(QWidget):
             
             if last_report and "report_data" in last_report:
                 report_data = last_report["report_data"]
-                # O seu JSON de relatório salva em 'input_data'
                 input_data = report_data.get("input_data", {})
                 
-                # 'avaliacaoagil' era o nome antigo no seu JSON salvo
+                # 'avaliacaoagil' ou 'autoavaliacao'
                 auto = input_data.get("autoavaliacao") or input_data.get("avaliacaoagil")
                 
                 if auto:
@@ -648,9 +757,15 @@ class HypertensionAssessment(QWidget):
             return 0
 
     def avaliar_hipertensao(self):
-        # Pega idade atual
+        if self.user["user_type"] == "doctor" and self.selected_patient_id is None:
+            QMessageBox.warning(self, "Ação Necessária", "Você deve buscar e selecionar um paciente ativo pelo CPF antes de avaliar.")
+            return
+
         idade_atual = self.get_current_age()
-        
+        if idade_atual == 0:
+            QMessageBox.warning(self, "Dados Incompletos", "Não foi possível determinar a idade do paciente.")
+            return
+            
         # Monta dados de Avaliação Agíl
         auto = {
             "idade_anos": idade_atual,
@@ -685,166 +800,90 @@ class HypertensionAssessment(QWidget):
                 "indice_pm25":              None if self.pm25.value() == 0 else self.pm25.value()
             }
 
-        # Assessment data
-        assessment_data = {
+        # Armazena dados para o worker
+        self.current_assessment_data = {
             "avaliacaoagil": auto,
             "exames": exames,
             "timestamp": datetime.now().isoformat()
         }
 
-        # Avaliação com IA
-        resultado = self.ai_assessment(assessment_data)
+        # --- (Req 5) Inicia popup e thread ---
+        self.loading_dialog = LoadingDialog(self)
+        
+        # Configura a thread e o worker
+        self.thread = QThread(self)
+        self.worker = AssessmentWorker(self.current_assessment_data, self.ai_assessment)
+        self.worker.moveToThread(self.thread)
+        
+        # Conecta os sinais
+        self.thread.started.connect(self.worker.run)
+        self.worker.finished.connect(self.on_assessment_finished)
+        self.worker.finished.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
+        
+        # Inicia a thread
+        self.thread.start()
+        
+        # Exibe o diálogo de carregamento
+        self.loading_dialog.exec_()
+    
+    def on_assessment_finished(self, resultado):
+        """
+        Chamado quando a thread de avaliação termina.
+        """
+        # Fecha o popup
+        if self.loading_dialog:
+            self.loading_dialog.accept()
+            
+        # Lida com o resultado
+        if "Erro" in resultado:
+            QMessageBox.critical(self, "Erro na Avaliação", resultado)
+            self.btn_salvar.setEnabled(False)
+            self.btn_pdf.setEnabled(False)
+            return
 
         self.result.setPlainText(resultado)
+        
+        # Armazena o último resultado
         self.last_assessment = {
-            "input_data": assessment_data,
+            "input_data": self.current_assessment_data,
             "ai_result": resultado
         }
-
-        self.btn_pdf.setEnabled(True)
+        
+        # Reseta o ID do relatório salvo
+        self.last_assessment_report_id = None
+        
+        # (Req 3/4) Habilita SALVAR, mas desabilita PDF
+        self.btn_pdf.setEnabled(False)
         if self.user["user_type"] == "doctor":
             self.btn_salvar.setEnabled(True)
-
-    def simulate_ai_assessment(self, data):
-        """Simula avaliação de IA - substitua pela integração real com Gemini"""
-        auto = data["avaliacaoagil"]
-        exames = data.get("exames")
-
-        risk_factors = []
-        score = 0
-
-        # Análise de fatores de risco
-        if auto["idade_anos"] > 40:
-            risk_factors.append("Idade acima de 40 anos")
-            score += 10
-
-        if auto["sexo_masculino"]:
-            risk_factors.append("Sexo masculino")
-            score += 5
-
-        if auto["historico_familiar_hipertensao"]:
-            risk_factors.append("Histórico familiar de hipertensão")
-            score += 15
-
-        # Calcula IMC
-        if auto["altura_cm"] > 0:
-            imc = auto["peso_kg"] / ((auto["altura_cm"]/100) ** 2)
-            if imc > 30:
-                risk_factors.append("Obesidade (IMC > 30)")
-                score += 15
-            elif imc > 25:
-                risk_factors.append("Sobrepeso (IMC > 25)")
-                score += 10
-
-        if auto["fuma_atualmente"]:
-            risk_factors.append("Tabagismo")
-            score += 20
-
-        if auto["bebidas_alcoolicas_semana"] > 14:
-            risk_factors.append("Consumo excessivo de álcool")
-            score += 10
-
-        if auto["nivel_estresse_0_10"] > 7:
-            risk_factors.append("Alto nível de estresse")
-            score += 10
-
-        if auto["sono_qualidade_ruim"]:
-            risk_factors.append("Qualidade de sono ruim")
-            score += 5
-
-        if auto["minutos_exercicio_semana"] < 150:
-            risk_factors.append("Sedentarismo (menos de 150min/semana)")
-            score += 10
-
-        if auto["porcoes_frutas_vegetais_dia"] < 5:
-            risk_factors.append("Dieta pobre em frutas e vegetais")
-            score += 5
-
-        # Análise de exames
-        if exames:
-            if exames.get("colesterol_ldl_mg_dL", 0) > 130:
-                risk_factors.append("LDL elevado (>130 mg/dL)")
-                score += 10
-
-            if exames.get("glicemia_jejum_mg_dL", 0) > 100:
-                risk_factors.append("Glicemia alterada (>100 mg/dL)")
-                score += 10
-
-            if exames.get("proteinuria_positiva", False):
-                risk_factors.append("Proteinúria positiva")
-                score += 15
-
-        # Classificação de risco
-        if score < 20:
-            risk_level = "BAIXO"
-            recommendation = "Manter hábitos saudáveis e monitoramento anual."
-        elif score < 40:
-            risk_level = "MODERADO"
-            recommendation = "Modificações no estilo de vida e monitoramento semestral."
-        elif score < 60:
-            risk_level = "ALTO"
-            recommendation = "Intervenção médica necessária. Monitoramento trimestral."
-        else:
-            risk_level = "MUITO ALTO"
-            recommendation = "Intervenção médica urgente. Acompanhamento mensal."
-
-        # Monta relatório
-        report = f"""
-🏥 RELATÓRIO DE AVALIAÇÃO DE RISCO DE HIPERTENSÃO
-
-📊 PONTUAÇÃO DE RISCO: {score} pontos
-🎯 NÍVEL DE RISCO: {risk_level}
-
-⚠️ FATORES DE RISCO IDENTIFICADOS:
-"""
-
-        if risk_factors:
-            for i, factor in enumerate(risk_factors, 1):
-                report += f"{i}. {factor}\n"
-        else:
-            report += "Nenhum fator de risco significativo identificado.\n"
-
-        report += f"""
-💡 RECOMENDAÇÕES:
-{recommendation}
-
-📝 ORIENTAÇÕES GERAIS:
-• Manter pressão arterial abaixo de 120/80 mmHg
-• Praticar exercícios regulares (mínimo 150min/semana)
-• Manter dieta rica em frutas, vegetais e pobre em sódio
-• Controlar peso corporal (IMC < 25)
-• Evitar tabagismo e consumo excessivo de álcool
-• Gerenciar níveis de estresse
-• Manter qualidade adequada do sono
-
-⏰ Data da Avaliação: {datetime.now().strftime('%d/%m/%Y %H:%M')}
-
-IMPORTANTE: Esta avaliação é apenas informativa. 
-Consulte sempre um médico para diagnóstico e tratamento adequados.
-"""
-
-        return report
-    
+        
+        # Pacientes também podem gerar PDF (mas não salvar no DB)
+        if self.user["user_type"] == "patient":
+             self.btn_pdf.setEnabled(True) # Paciente não precisa "salvar"
+            
     def ai_assessment(self, data):
         """Avaliação de risco de hipertensão usando Gemini AI"""
         
-        API_KEY = os.getenv("GEMINI_API_KEY")
+        # Esta função agora é executada em uma thread separada
         
+        API_KEY = os.getenv("GEMINI_API_KEY")
+        if not API_KEY:
+             return "Erro: GEMINI_API_KEY não configurada no ambiente."
+
         try:
-            # Inicializa cliente Gemini
             gemini = genai.Client(
                 api_key=API_KEY, 
                 http_options=types.HttpOptions(api_version="v1alpha")
             )
             chat = gemini.chats.create(model="gemini-2.0-flash")
             
-            # Prepara dados para análise
             auto = data["avaliacaoagil"]
             exames = data.get("exames")
             
-            # Calcula IMC para incluir no prompt
             imc = None
-            if auto["altura_cm"] > 0:
+            if auto["altura_cm"] > 0 and auto["peso_kg"] > 0:
                 imc = auto["peso_kg"] / ((auto["altura_cm"]/100) ** 2)
             
             imc_str = f"{imc:.1f}" if imc else "Não calculado"
@@ -856,7 +895,7 @@ Você é um especialista em cardiologia e medicina preventiva. Analise os dados 
 DADOS DO PACIENTE:
 =================
 
-DADOS DEMOGRÁFICOS E ESTILO DE VIDA:
+DADOS DEMOGRÁFICOS E ESTILO de VIDA:
 • Idade: {auto['idade_anos']} anos
 • Sexo: {'Masculino' if auto['sexo_masculino'] else 'Feminino'}
 • Histórico familiar de hipertensão: {'Sim' if auto['historico_familiar_hipertensao'] else 'Não'}
@@ -875,18 +914,18 @@ EXAMES LABORATORIAIS:
 
             if exames:
                 prompt += f"""
-• Colesterol LDL: {exames.get('colesterol_ldl_mg_dL', 'Não informado')} mg/dL
-• Colesterol HDL: {exames.get('colesterol_hdl_mg_dL', 'Não informado')} mg/dL
-• Triglicerídeos: {exames.get('triglicerideos_mg_dL', 'Não informado')} mg/dL
-• Glicemia de jejum: {exames.get('glicemia_jejum_mg_dL', 'Não informado')} mg/dL
-• HbA1c: {exames.get('hba1c_percent', 'Não informado')}%
-• Creatinina: {exames.get('creatinina_mg_dL', 'Não informado')} mg/dL
+• Colesterol LDL: {exames.get('colesterol_ldl_mg_dL', 'Não informado') or 'Não informado'} mg/dL
+• Colesterol HDL: {exames.get('colesterol_hdl_mg_dL', 'Não informado') or 'Não informado'} mg/dL
+• Triglicerídeos: {exames.get('triglicerideos_mg_dL', 'Não informado') or 'Não informado'} mg/dL
+• Glicemia de jejum: {exames.get('glicemia_jejum_mg_dL', 'Não informado') or 'Não informado'} mg/dL
+• HbA1c: {exames.get('hba1c_percent', 'Não informado') or 'Não informado'}%
+• Creatinina: {exames.get('creatinina_mg_dL', 'Não informado') or 'Não informado'} mg/dL
 • Proteinúria: {'Positiva' if exames.get('proteinuria_positiva', False) else 'Negativa'}
 • Diagnóstico de apneia do sono: {'Sim' if exames.get('diagnostico_apneia_sono', False) else 'Não'}
-• Cortisol sérico: {exames.get('cortisol_serico_ug_dL', 'Não informado')} μg/dL
+• Cortisol sérico: {exames.get('cortisol_serico_ug_dL', 'Não informado') or 'Não informado'} μg/dL
 • Mutação genética para hipertensão: {'Sim' if exames.get('mutacao_genetica_hipertensao', False) else 'Não'}
-• BPM em repouso: {exames.get('bpm_repouso', 'Não informado')}
-• Índice PM2.5: {exames.get('indice_pm25', 'Não informado')}
+• BPM em repouso: {exames.get('bpm_repouso', 'Não informado') or 'Não informado'}
+• Índice PM2.5: {exames.get('indice_pm25', 'Não informado') or 'Não informado'}
 """
             else:
                 prompt += "Não foram fornecidos exames laboratoriais.\n"
@@ -895,15 +934,12 @@ EXAMES LABORATORIAIS:
 
 INSTRUÇÕES PARA AVALIAÇÃO:
 =========================
-
-1. Analise todos os fatores de risco para hipertensão presentes nos dados
-2. Calcule uma pontuação de risco baseada em evidências científicas em uma escala de 0 a 100
-3. Classifique o risco como: BAIXO, MODERADO, ALTO ou MUITO ALTO
-4. Forneça recomendações específicas baseadas no perfil do paciente
+1. Analise todos os fatores de risco para hipertensão presentes nos dados.
+2. Calcule uma pontuação de risco (0-100) e classifique (BAIXO, MODERADO, ALTO, MUITO ALTO).
+3. Forneça recomendações específicas.
 
 FORMATO DE RESPOSTA OBRIGATÓRIO:
 ===============================
-
 🏥 RELATÓRIO DE AVALIAÇÃO DE RISCO DE HIPERTENSÃO
 
 📊 PONTUAÇÃO DE RISCO: [pontuação] pontos
@@ -932,33 +968,30 @@ Consulte sempre um médico para diagnóstico e tratamento adequados.
 RESPONDA APENAS COM O RELATÓRIO NO FORMATO ESPECIFICADO ACIMA.
 """
 
-            # Envia prompt para Gemini
             response = chat.send_message(prompt)
-            
-            # Retorna o texto da resposta
             return response.text
             
         except Exception as e:
-            # Fallback para simulação local em caso de erro
             print(f"Erro na avaliação com Gemini: {e}")
-            return "Erro ao avaliar com Gemini. Contate os administradores."
+            return f"Erro ao avaliar com Gemini: {str(e)}"
 
     def salvar_relatorio(self):
         """Salva relatório no banco de dados (apenas médicos)"""
         if self.user["user_type"] != "doctor":
             return
 
+        # (Req 4) Aviso para gerar relatório primeiro
         if not self.last_assessment:
             QMessageBox.warning(
-                self, "Erro", "Realize uma avaliação primeiro!")
+                self, "Ação Necessária", "Você deve gerar um relatório (clicando em 'Avaliar Hipertensão') antes de salvar.")
             return
 
         # Pega o paciente selecionado
-        if self.patient_combo.currentData() is None:
-            QMessageBox.warning(self, "Erro", "Selecione um paciente!")
+        if self.selected_patient_id is None:
+            QMessageBox.warning(self, "Erro", "Nenhum paciente selecionado!")
             return
 
-        patient_id = self.patient_combo.currentData()
+        patient_id = self.selected_patient_id
 
         # Salva no banco
         report_id = self.db_manager.create_report(
@@ -969,48 +1002,55 @@ RESPONDA APENAS COM O RELATÓRIO NO FORMATO ESPECIFICADO ACIMA.
 
         if report_id:
             QMessageBox.information(
-                self, "Sucesso", "Relatório realizado com sucesso!")
+                self, "Sucesso", "Relatório salvo com sucesso!")
             self.btn_salvar.setEnabled(False)
+            self.btn_pdf.setEnabled(True)
+            self.last_assessment_report_id = report_id
         else:
             QMessageBox.warning(self, "Erro", "Erro ao salvar relatório!")
 
     def gerar_pdf(self):
         """Método para gerar PDF no estilo oficial preto e branco"""
+        
+        # (Req 4) Aviso para salvar primeiro (só para médicos)
+        if self.user["user_type"] == "doctor" and self.last_assessment_report_id is None:
+            QMessageBox.warning(
+                self, "Ação Necessária", "Você deve salvar o relatório (clicando em 'Salvar Relatório') antes de gerar o PDF.")
+            return
+            
         if not self.last_assessment:
             QMessageBox.warning(self, "Erro", "Realize uma avaliação primeiro!")
             return
         
         try:
-            # Prepara dados
             data = {
                 "avaliacaoagil": self.last_assessment["input_data"]["avaliacaoagil"],
                 "exames": self.last_assessment["input_data"].get("exames"),
                 "ai_result": self.last_assessment["ai_result"]
             }
             
-            # Informações do usuário
             user_info = {
                 "name": self.user["name"],
                 "user_type": self.user.get("user_type", "patient")
             }
             
-            # Nome do paciente
+            # (Req 1) Pega nome do paciente do label
             patient_name = None
-            if self.user["user_type"] == "doctor" and self.patient_combo.currentData():
-                patient_name = self.patient_combo.currentText()
+            if self.user["user_type"] == "doctor" and self.selected_patient_id:
+                patient_name = self.patient_name_label.text()
+            elif self.user["user_type"] == "patient":
+                patient_name = self.user["name"] # O próprio paciente
             
-            # Gera o PDF (agora com diálogo de salvamento)
+            # Gera o PDF
             generator = MedicalReportPDFWriter()
             filename = generator.generate_pdf(data, user_info, patient_name)
         
-            # Verifica se o usuário não cancelou
             if filename:
                 QMessageBox.information(
                     self, 
                     "✅ Laudo Gerado", 
                     f"Laudo médico oficial gerado com sucesso!\n\n📁 Salvo em:\n{filename}"
                 )
-            # Se filename for None, usuário cancelou - não mostra nada
             
         except Exception as e:
             QMessageBox.critical(

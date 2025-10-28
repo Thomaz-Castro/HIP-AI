@@ -497,6 +497,24 @@ class DatabaseManager:
             cursor.close()
             self.return_connection(conn)
 
+    def get_user_by_cpf(self, cpf, user_type='patient'):
+        """Busca um usuário ATIVO pelo CPF e tipo."""
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute(
+                "SELECT * FROM users WHERE cpf = %s AND user_type = %s AND is_active = TRUE",
+                (cpf, user_type)
+            )
+            user = cursor.fetchone()
+            return dict(user) if user else None
+        except Exception as e:
+            print(f"❌ Erro ao buscar usuário por CPF: {e}")
+            return None
+        finally:
+            cursor.close()
+            self.return_connection(conn)
+
     def get_doctor_reports(self, doctor_id, include_inactive=False):
         """Retorna todos os relatórios criados por um médico"""
         conn = self.get_connection()
