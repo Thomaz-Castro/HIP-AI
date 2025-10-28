@@ -1,4 +1,5 @@
 import os
+import re
 from datetime import datetime
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QFormLayout, QGroupBox,
@@ -6,7 +7,7 @@ from PyQt5.QtWidgets import (
     QPlainTextEdit, QHBoxLayout, QLineEdit, QScrollArea,
     QMessageBox, QFrame, QDialog, QProgressBar
 )
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QIntValidator
 from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal
 from google import genai
 from google.genai import types
@@ -66,6 +67,134 @@ class AssessmentWorker(QObject):
             print(f"Erro no worker de avaliação: {e}")
             self.finished.emit(f"Erro ao processar avaliação: {e}")
 
+
+# --- CLASSE PARA FORMATAÇÃO E VALIDAÇÃO DE CPF ---
+
+class CPFLineEdit(QLineEdit):
+    """
+    QLineEdit personalizado com formatação automática de CPF
+    e validação em tempo real.
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setPlaceholderText("Digite o CPF (apenas números)")
+        self.setMaxLength(14)  # 11 dígitos + 3 separadores
+        self.textChanged.connect(self.format_cpf)
+        self.setStyleSheet("""
+            QLineEdit {
+                border: 2px solid #bdc3c7;
+                border-radius: 6px;
+                padding: 8px 12px;
+                background-color: white;
+                font-size: 11pt;
+                min-height: 20px;
+                font-weight: 500;
+            }
+            QLineEdit:focus {
+                border-color: #3498db;
+                outline: none;
+            }
+            QLineEdit[valid="true"] {
+                border-color: #27ae60;
+                background-color: #eafaf1;
+            }
+            QLineEdit[valid="false"] {
+                border-color: #e74c3c;
+                background-color: #fadbd8;
+            }
+        """)
+    
+    def format_cpf(self):
+        """Formata o CPF automaticamente enquanto o usuário digita"""
+        # Remove tudo que não é número
+        text = re.sub(r'\D', '', self.text())
+        
+        # Limita a 11 dígitos
+        if len(text) > 11:
+            text = text[:11]
+        
+        # Formata o CPF
+        formatted = ""
+        if len(text) <= 3:
+            formatted = text
+        elif len(text) <= 6:
+            formatted = f"{text[:3]}.{text[3:]}"
+        elif len(text) <= 9:
+            formatted = f"{text[:3]}.{text[3:6]}.{text[6:]}"
+        else:
+            formatted = f"{text[:3]}.{text[3:6]}.{text[6:9]}-{text[9:]}"
+        
+        # Atualiza o texto sem reemitir o sinal
+        self.blockSignals(True)
+        cursor_pos = self.cursorPosition()
+        old_length = len(self.text())
+        self.setText(formatted)
+        
+        # Ajusta a posição do cursor
+        new_length = len(formatted)
+        if new_length > old_length:
+            cursor_pos += (new_length - old_length)
+        self.setCursorPosition(min(cursor_pos, new_length))
+        self.blockSignals(False)
+        
+        # Atualiza o estilo baseado na validade
+        self.update_validity_style()
+    
+    def get_raw_cpf(self):
+        """Retorna o CPF sem formatação (apenas números)"""
+        return re.sub(r'\D', '', self.text())
+    
+    def is_valid_cpf(self, cpf):
+        """Valida o CPF usando o algoritmo oficial"""
+        # Remove caracteres não numéricos
+        cpf = re.sub(r'\D', '', cpf)
+        
+        # Verifica se tem 11 dígitos
+        if len(cpf) != 11:
+            return False
+        
+        # Verifica se todos os dígitos são iguais
+        if cpf == cpf[0] * 11:
+            return False
+        
+        # Valida primeiro dígito verificador
+        soma = sum(int(cpf[i]) * (10 - i) for i in range(9))
+        digito1 = (soma * 10 % 11) % 10
+        if digito1 != int(cpf[9]):
+            return False
+        
+        # Valida segundo dígito verificador
+        soma = sum(int(cpf[i]) * (11 - i) for i in range(10))
+        digito2 = (soma * 10 % 11) % 10
+        if digito2 != int(cpf[10]):
+            return False
+        
+        return True
+    
+    def update_validity_style(self):
+        """Atualiza o estilo visual baseado na validade do CPF"""
+        cpf = self.get_raw_cpf()
+        
+        if len(cpf) == 0:
+            self.setProperty("valid", "")
+        elif len(cpf) == 11:
+            if self.is_valid_cpf(cpf):
+                self.setProperty("valid", "true")
+            else:
+                self.setProperty("valid", "false")
+        else:
+            self.setProperty("valid", "")
+        
+        # Força atualização do estilo
+        self.style().unpolish(self)
+        self.style().polish(self)
+    
+    def is_complete_and_valid(self):
+        """Verifica se o CPF está completo e válido"""
+        cpf = self.get_raw_cpf()
+        return len(cpf) == 11 and self.is_valid_cpf(cpf)
+
+
 # --- CLASSE PRINCIPAL DA TELA ---
 
 class HypertensionAssessment(QWidget):
@@ -100,7 +229,7 @@ class HypertensionAssessment(QWidget):
         return age
 
     def init_ui(self):
-        # Aplicar estilo geral (mantém o mesmo)
+        # Aplicar estilo geral
         self.setStyleSheet("""
             QWidget {
                 font-family: 'Segoe UI', Arial, sans-serif;
@@ -288,29 +417,58 @@ class HypertensionAssessment(QWidget):
         if self.user["user_type"] == "doctor":
             patient_group = QGroupBox("👤 Seleção de Paciente")
             patient_layout = QFormLayout()
-            patient_layout.setSpacing(10)
+            patient_layout.setSpacing(15)
             patient_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
             
             # Layout de busca (CPF + Botão)
             search_layout = QHBoxLayout()
             search_layout.setSpacing(10)
             
-            self.cpf_input = QLineEdit()
-            self.cpf_input.setPlaceholderText("Digite o CPF (ex: 123.456.789-00)")
+            # Usa o CPFLineEdit personalizado
+            self.cpf_input = CPFLineEdit()
             self.cpf_input.setMinimumHeight(35)
-            search_layout.addWidget(self.cpf_input, 3) # Input com 3/4 do espaço
+            self.cpf_input.returnPressed.connect(self.search_patient_by_cpf)  # Enter para buscar
+            search_layout.addWidget(self.cpf_input, 3)
             
             self.search_patient_btn = QPushButton("🔍 Buscar")
             self.search_patient_btn.setMinimumHeight(35)
             self.search_patient_btn.clicked.connect(self.search_patient_by_cpf)
-            search_layout.addWidget(self.search_patient_btn, 1) # Botão com 1/4
+            search_layout.addWidget(self.search_patient_btn, 1)
             
             patient_layout.addRow(self.create_bold_label("Buscar por CPF:"), search_layout)
             
-            # Label para nome do paciente
+            # Label de validação do CPF
+            self.cpf_validation_label = QLabel("")
+            self.cpf_validation_label.setStyleSheet("font-size: 9pt; font-style: italic;")
+            self.cpf_validation_label.setWordWrap(True)
+            patient_layout.addRow("", self.cpf_validation_label)
+            
+            # Conecta mudanças no CPF para atualizar mensagem de validação
+            self.cpf_input.textChanged.connect(self.update_cpf_validation_message)
+            
+            # Label para nome do paciente com ícone de status
+            patient_info_frame = QFrame()
+            patient_info_frame.setStyleSheet("""
+                QFrame {
+                    background-color: #f8f9fa;
+                    border: 2px solid #e8e8e8;
+                    border-radius: 8px;
+                    padding: 10px;
+                }
+            """)
+            patient_info_layout = QHBoxLayout(patient_info_frame)
+            patient_info_layout.setContentsMargins(10, 10, 10, 10)
+            
+            self.patient_status_icon = QLabel("⚪")
+            self.patient_status_icon.setFont(QFont("Segoe UI", 14))
+            patient_info_layout.addWidget(self.patient_status_icon)
+            
             self.patient_name_label = QLabel("Nenhum paciente selecionado")
             self.patient_name_label.setStyleSheet("font-weight: bold; color: #7f8c8d; font-size: 11pt;")
-            patient_layout.addRow(self.create_bold_label("Paciente:"), self.patient_name_label)
+            self.patient_name_label.setWordWrap(True)
+            patient_info_layout.addWidget(self.patient_name_label, 1)
+            
+            patient_layout.addRow(self.create_bold_label("Paciente:"), patient_info_frame)
             
             patient_group.setLayout(patient_layout)
             content_layout.addWidget(patient_group)
@@ -619,37 +777,79 @@ class HypertensionAssessment(QWidget):
         label.setStyleSheet("font-weight: bold; color: #34495e;")
         return label
 
+    def update_cpf_validation_message(self):
+        """Atualiza a mensagem de validação do CPF em tempo real"""
+        if self.user["user_type"] != "doctor":
+            return
+            
+        cpf = self.cpf_input.get_raw_cpf()
+        
+        if len(cpf) == 0:
+            self.cpf_validation_label.setText("")
+            self.cpf_validation_label.setStyleSheet("font-size: 9pt;")
+        elif len(cpf) < 11:
+            self.cpf_validation_label.setText(f"⏳ Digite mais {11 - len(cpf)} dígito(s)")
+            self.cpf_validation_label.setStyleSheet("font-size: 9pt; color: #f39c12; font-style: italic;")
+        elif self.cpf_input.is_complete_and_valid():
+            self.cpf_validation_label.setText("✅ CPF válido - Pressione Enter ou clique em Buscar")
+            self.cpf_validation_label.setStyleSheet("font-size: 9pt; color: #27ae60; font-weight: bold;")
+        else:
+            self.cpf_validation_label.setText("❌ CPF inválido - Verifique os números digitados")
+            self.cpf_validation_label.setStyleSheet("font-size: 9pt; color: #e74c3c; font-weight: bold;")
+
     def search_patient_by_cpf(self):
         """Busca paciente por CPF no banco de dados"""
-        cpf = self.cpf_input.text()
-        if not cpf:
-            QMessageBox.warning(self, "Entrada inválida", "Por favor, digite um CPF.")
+        if not self.cpf_input.is_complete_and_valid():
+            QMessageBox.warning(
+                self, 
+                "CPF Inválido", 
+                "Por favor, digite um CPF válido antes de buscar.\n\nO CPF deve conter 11 dígitos e passar pela validação."
+            )
+            self.cpf_input.setFocus()
             return
+
+        cpf = self.cpf_input.text()
 
         # Busca apenas pacientes ATIVOS pelo CPF
         patient = self.db_manager.get_user_by_cpf(cpf, user_type='patient')
         
         if patient:
             self.selected_patient_id = patient['id']
-            self.patient_name_label.setText(patient['name'])
-            self.patient_name_label.setStyleSheet("font-weight: bold; color: #27ae60; font-size: 11pt;") # Verde
+            self.patient_name_label.setText(f"{patient['name']}")
+            self.patient_name_label.setStyleSheet("font-weight: bold; color: #27ae60; font-size: 11pt;")
+            self.patient_status_icon.setText("✅")
             
-            # --- ATUALIZADO: Reseta os botões, dados e flags ---
+            # Reseta os botões, dados e flags
             self.last_assessment = None
             self.last_assessment_report_id = None
-            self.flag_avaliar_concluida = False # Reseta flag
-            self.flag_salvar_concluido = False # Reseta flag
+            self.flag_avaliar_concluida = False
+            self.flag_salvar_concluido = False
             
             self.result.clear()
             
             # Carrega os dados do paciente encontrado
             self.load_initial_data()
+            
+            # Feedback visual de sucesso
+            QMessageBox.information(
+                self,
+                "✅ Paciente Encontrado",
+                f"Paciente {patient['name']} encontrado com sucesso!\n\nCPF: {self.cpf_input.text()}"
+            )
         else:
             self.selected_patient_id = None
             self.patient_name_label.setText("Paciente não encontrado ou inativo")
-            self.patient_name_label.setStyleSheet("font-weight: bold; color: #e74c3c; font-size: 11pt;") # Vermelho
+            self.patient_name_label.setStyleSheet("font-weight: bold; color: #e74c3c; font-size: 11pt;")
+            self.patient_status_icon.setText("❌")
             self.clear_form_fields()
-            self.idade.clear()         
+            self.idade.clear()
+            
+            QMessageBox.warning(
+                self,
+                "❌ Paciente Não Encontrado",
+                f"Não foi encontrado nenhum paciente ativo com o CPF:\n{self.cpf_input.text()}\n\nVerifique se:\n• O CPF está correto\n• O paciente está cadastrado no sistema\n• O cadastro do paciente está ativo"
+            )
+         
     def clear_form_fields(self):
         """Limpa todos os campos do formulário"""
         # Campos de avaliação ágil
@@ -691,7 +891,7 @@ class HypertensionAssessment(QWidget):
             patient_data = self.user
         
         elif self.user["user_type"] == "doctor":
-            patient_id = self.selected_patient_id # Usa o ID do paciente encontrado
+            patient_id = self.selected_patient_id
             if patient_id:
                 patient_data = self.db_manager.get_user_by_id(patient_id)
             else:
@@ -768,7 +968,7 @@ class HypertensionAssessment(QWidget):
             QMessageBox.warning(self, "Dados Incompletos", "Não foi possível determinar a idade do paciente.")
             return
             
-        # Monta dados de Avaliação Agíl
+        # Monta dados de Avaliação Ágil
         auto = {
             "idade_anos": idade_atual,
             "sexo_masculino": self.sexo_m.isChecked(),
@@ -809,7 +1009,7 @@ class HypertensionAssessment(QWidget):
             "timestamp": datetime.now().isoformat()
         }
 
-        # --- (Req 5) Inicia popup e thread ---
+        # Inicia popup e thread
         self.loading_dialog = LoadingDialog(self)
         
         # Configura a thread e o worker
@@ -831,9 +1031,7 @@ class HypertensionAssessment(QWidget):
         self.loading_dialog.exec_()
     
     def on_assessment_finished(self, resultado):
-        """
-        Chamado quando a thread de avaliação termina.
-        """
+        """Chamado quando a thread de avaliação termina"""
         # Fecha o popup
         if self.loading_dialog:
             self.loading_dialog.accept()
@@ -862,8 +1060,6 @@ class HypertensionAssessment(QWidget):
              
     def ai_assessment(self, data):
         """Avaliação de risco de hipertensão usando Gemini AI"""
-        
-        # Esta função agora é executada em uma thread separada
         
         API_KEY = os.getenv("GEMINI_API_KEY")
         if not API_KEY:
@@ -977,13 +1173,11 @@ RESPONDA APENAS COM O RELATÓRIO NO FORMATO ESPECIFICADO ACIMA.
         if self.user["user_type"] != "doctor":
             return
 
-        # --- ATUALIZADO: Checa a flag de avaliação ---
         if not self.flag_avaliar_concluida:
             QMessageBox.warning(
                 self, "Ação Necessária", "Você deve gerar um relatório (clicando em 'Avaliar Hipertensão') antes de salvar.")
             return
 
-        # Pega o paciente selecionado
         if self.selected_patient_id is None:
             QMessageBox.warning(self, "Erro", "Nenhum paciente selecionado!")
             return
@@ -1004,7 +1198,6 @@ RESPONDA APENAS COM O RELATÓRIO NO FORMATO ESPECIFICADO ACIMA.
             self.flag_salvar_concluido = True
         else:
             QMessageBox.warning(self, "Erro", "Erro ao salvar relatório!")
-            # Garante que a flag não seja setada se falhar
             self.flag_salvar_concluido = False
 
 
@@ -1032,12 +1225,12 @@ RESPONDA APENAS COM O RELATÓRIO NO FORMATO ESPECIFICADO ACIMA.
                 "user_type": self.user.get("user_type", "patient")
             }
             
-            # (Req 1) Pega nome do paciente do label
+            # Pega nome do paciente do label
             patient_name = None
             if self.user["user_type"] == "doctor" and self.selected_patient_id:
                 patient_name = self.patient_name_label.text()
             elif self.user["user_type"] == "patient":
-                patient_name = self.user["name"] # O próprio paciente
+                patient_name = self.user["name"]
             
             # Gera o PDF
             generator = MedicalReportPDFWriter()
