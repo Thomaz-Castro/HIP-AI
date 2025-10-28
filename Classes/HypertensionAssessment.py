@@ -79,6 +79,10 @@ class HypertensionAssessment(QWidget):
         self.last_assessment = None
         self.last_assessment_report_id = None
         self.current_assessment_data = None
+
+        #flags
+        self.flag_avaliar_concluida = False
+        self.flag_salvar_concluido = False
         
         # Para o threading
         self.thread = None
@@ -547,14 +551,12 @@ class HypertensionAssessment(QWidget):
             self.btn_salvar = QPushButton("💾 Salvar Relatório")
             self.btn_salvar.setObjectName("btn_salvar")
             self.btn_salvar.clicked.connect(self.salvar_relatorio)
-            self.btn_salvar.setEnabled(False) # Habilitado após avaliar
             self.btn_salvar.setMinimumHeight(45)
             btns.addWidget(self.btn_salvar)
 
         self.btn_pdf = QPushButton("📄 Gerar PDF")
         self.btn_pdf.setObjectName("btn_pdf")
         self.btn_pdf.clicked.connect(self.gerar_pdf)
-        self.btn_pdf.setEnabled(False) # Habilitado após salvar
         self.btn_pdf.setMinimumHeight(45)
         btns.addWidget(self.btn_pdf)
         
@@ -632,11 +634,12 @@ class HypertensionAssessment(QWidget):
             self.patient_name_label.setText(patient['name'])
             self.patient_name_label.setStyleSheet("font-weight: bold; color: #27ae60; font-size: 11pt;") # Verde
             
-            # Reseta os botões e resultados
+            # --- ATUALIZADO: Reseta os botões, dados e flags ---
             self.last_assessment = None
             self.last_assessment_report_id = None
-            self.btn_salvar.setEnabled(False)
-            self.btn_pdf.setEnabled(False)
+            self.flag_avaliar_concluida = False # Reseta flag
+            self.flag_salvar_concluido = False # Reseta flag
+            
             self.result.clear()
             
             # Carrega os dados do paciente encontrado
@@ -646,8 +649,7 @@ class HypertensionAssessment(QWidget):
             self.patient_name_label.setText("Paciente não encontrado ou inativo")
             self.patient_name_label.setStyleSheet("font-weight: bold; color: #e74c3c; font-size: 11pt;") # Vermelho
             self.clear_form_fields()
-            self.idade.clear()
-            
+            self.idade.clear()         
     def clear_form_fields(self):
         """Limpa todos os campos do formulário"""
         # Campos de avaliação ágil
@@ -839,8 +841,8 @@ class HypertensionAssessment(QWidget):
         # Lida com o resultado
         if "Erro" in resultado:
             QMessageBox.critical(self, "Erro na Avaliação", resultado)
-            self.btn_salvar.setEnabled(False)
-            self.btn_pdf.setEnabled(False)
+            self.flag_avaliar_concluida = False
+            self.flag_salvar_concluido = False
             return
 
         self.result.setPlainText(resultado)
@@ -854,15 +856,10 @@ class HypertensionAssessment(QWidget):
         # Reseta o ID do relatório salvo
         self.last_assessment_report_id = None
         
-        # (Req 3/4) Habilita SALVAR, mas desabilita PDF
-        self.btn_pdf.setEnabled(False)
-        if self.user["user_type"] == "doctor":
-            self.btn_salvar.setEnabled(True)
-        
-        # Pacientes também podem gerar PDF (mas não salvar no DB)
-        if self.user["user_type"] == "patient":
-             self.btn_pdf.setEnabled(True) # Paciente não precisa "salvar"
-            
+        self.flag_avaliar_concluida = True
+        self.flag_salvar_concluido = False
+             
+             
     def ai_assessment(self, data):
         """Avaliação de risco de hipertensão usando Gemini AI"""
         
@@ -980,8 +977,8 @@ RESPONDA APENAS COM O RELATÓRIO NO FORMATO ESPECIFICADO ACIMA.
         if self.user["user_type"] != "doctor":
             return
 
-        # (Req 4) Aviso para gerar relatório primeiro
-        if not self.last_assessment:
+        # --- ATUALIZADO: Checa a flag de avaliação ---
+        if not self.flag_avaliar_concluida:
             QMessageBox.warning(
                 self, "Ação Necessária", "Você deve gerar um relatório (clicando em 'Avaliar Hipertensão') antes de salvar.")
             return
@@ -1003,22 +1000,23 @@ RESPONDA APENAS COM O RELATÓRIO NO FORMATO ESPECIFICADO ACIMA.
         if report_id:
             QMessageBox.information(
                 self, "Sucesso", "Relatório salvo com sucesso!")
-            self.btn_salvar.setEnabled(False)
-            self.btn_pdf.setEnabled(True)
             self.last_assessment_report_id = report_id
+            self.flag_salvar_concluido = True
         else:
             QMessageBox.warning(self, "Erro", "Erro ao salvar relatório!")
+            # Garante que a flag não seja setada se falhar
+            self.flag_salvar_concluido = False
+
 
     def gerar_pdf(self):
         """Método para gerar PDF no estilo oficial preto e branco"""
         
-        # (Req 4) Aviso para salvar primeiro (só para médicos)
-        if self.user["user_type"] == "doctor" and self.last_assessment_report_id is None:
+        if self.user["user_type"] == "doctor" and not self.flag_salvar_concluido:
             QMessageBox.warning(
                 self, "Ação Necessária", "Você deve salvar o relatório (clicando em 'Salvar Relatório') antes de gerar o PDF.")
             return
             
-        if not self.last_assessment:
+        if not self.flag_avaliar_concluida:
             QMessageBox.warning(self, "Erro", "Realize uma avaliação primeiro!")
             return
         
