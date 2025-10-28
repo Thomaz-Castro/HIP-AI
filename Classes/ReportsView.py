@@ -1,11 +1,9 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QPushButton, QHBoxLayout,
     QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit,
-    QLabel, QComboBox, QDateEdit, QFrame, QSpacerItem, QSizePolicy,
-    QScrollArea
+    QLabel, QComboBox, QDateEdit, QFrame, QScrollArea
 )
 from PyQt5.QtCore import Qt, QDate
-from PyQt5.QtGui import QFont, QColor
 
 from Classes.ReportviewDialog import ReportViewDialog
 
@@ -486,6 +484,7 @@ class ReportsView(QWidget):
         total_height = header_height + rows_height + 5
         
         self.table.setFixedHeight(total_height)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
 
     def view_report(self, report):
         """Abre o diálogo para visualizar o relatório"""

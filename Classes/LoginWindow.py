@@ -88,12 +88,6 @@ class LoginWindow(QDialog):
         self.login_btn.clicked.connect(self.login)
         layout.addWidget(self.login_btn)
 
-        # Info do admin
-        # info_label = QLabel("👨‍💼 Admin padrão: admin@sistema.com / admin123")
-        # info_label.setAlignment(Qt.AlignCenter)
-        # info_label.setStyleSheet("font-size: 12px; margin-top: 20px;")
-        # layout.addWidget(info_label)
-
         self.setLayout(layout)
 
         # Enter para login
@@ -103,37 +97,41 @@ class LoginWindow(QDialog):
         email = self.email_input.text().strip()
         password = self.password_input.text()
 
-        print(f"Tentando login com: {email}")
-
         if not email or not password:
-            QMessageBox.warning(self, "Erro", "Preencha email e senha!")
+            QMessageBox.warning(self, "❌ Erro", "Preencha email e senha!")
             return
 
         user = self.db_manager.authenticate(email, password)
+        
         if user:
-            print(
-                f"Login bem sucedido para: {user['name']} ({user['user_type']})")
+            # Verifica se o usuário está ativo
+            if not user.get('is_active', True):
+                QMessageBox.warning(
+                    self, 
+                    "🔒 Acesso Negado", 
+                    "Esta conta está desativada.\n\n"
+                    "Entre em contato com o administrador do sistema."
+                )
+                self.password_input.clear()
+                return
+            
+            print(f"Login bem sucedido para: {user['name']} ({user['user_type']})")
             self.user = user
-            # Fecha o diálogo de login e abre a janela principal
             self.accept()
         else:
             print("Login falhou - credenciais inválidas")
-            QMessageBox.warning(self, "Erro", "Email ou senha inválidos!")
+            QMessageBox.warning(self, "❌ Erro", "Email ou senha inválidos!")
             self.password_input.clear()
 
     def accept(self):
-        print("LoginWindow.accept() chamado")
-        # Import apenas quando necessário (lazy import)
         from Classes.MainWindow import MainWindow
         
         if self.user:
             print(f"Abrindo janela principal para: {self.user['name']}")
-            self.hide()  # Esconde o login
+            self.hide()
             self.main_window = MainWindow(self.db_manager, self.user)
             self.main_window.login_window = self
             self.main_window.show()
-            print("Janela principal aberta")
-            # Só aceita o diálogo depois que a janela principal estiver visível
             QDialog.accept(self)
         else:
             print("Erro: usuário não definido")

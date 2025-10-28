@@ -3,7 +3,7 @@ from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from datetime import datetime
-from PyQt5.QtWidgets import QFileDialog, QWidget
+from PyQt5.QtWidgets import QFileDialog
 import os
 
 

@@ -9,11 +9,12 @@ import re
 
 
 class UserDialog(QDialog):
-    def __init__(self, db_manager, user_type, user_id=None):
+    def __init__(self, db_manager, user_type, user_id=None, current_user=None):
         super().__init__()
         self.db_manager = db_manager
         self.user_type = user_type
         self.user_id = user_id
+        self.current_user = current_user  # Para auditoria
         self.init_ui()
 
         if user_id:
@@ -39,7 +40,7 @@ class UserDialog(QDialog):
         
         self.setWindowTitle(f"{action} {type_name}")
         self.setModal(True)
-        self.resize(500, 450)
+        self.resize(500, 550)
         
         # Estilo moderno
         self.setStyleSheet("""
@@ -162,6 +163,13 @@ class UserDialog(QDialog):
         self.name_input.setPlaceholderText("Digite o nome completo")
         self.name_input.textChanged.connect(self.validate_name)
         form_layout.addRow(name_label_widget, self.name_input)
+
+        # CPF
+        cpf_label = QLabel("CPF:")
+        self.cpf_input = QLineEdit()
+        self.cpf_input.setPlaceholderText("000.000.000-00")
+        self.cpf_input.textChanged.connect(self.format_cpf)
+        form_layout.addRow(cpf_label, self.cpf_input)
 
         # Email *
         email_label_widget = QWidget()
@@ -334,6 +342,41 @@ class UserDialog(QDialog):
             self.password_input.setProperty("valid", "false")
         self.password_input.setStyleSheet(self.password_input.styleSheet())
 
+    def format_cpf(self):
+        """Formata o CPF automaticamente e valida"""
+        text = self.cpf_input.text()
+        # Remove tudo que não é número
+        numbers = re.sub(r'\D', '', text)
+        
+        # Limita a 11 dígitos
+        numbers = numbers[:11]
+        
+        # Formata
+        if len(numbers) <= 11:
+            if len(numbers) >= 10:
+                formatted = f"{numbers[:3]}.{numbers[3:6]}.{numbers[6:9]}-{numbers[9:]}"
+            elif len(numbers) >= 7:
+                formatted = f"{numbers[:3]}.{numbers[3:6]}.{numbers[6:]}"
+            elif len(numbers) >= 4:
+                formatted = f"{numbers[:3]}.{numbers[3:]}"
+            else:
+                formatted = numbers
+        else:
+            formatted = numbers
+        
+        # Bloqueia sinais para evitar loop
+        self.cpf_input.blockSignals(True)
+        self.cpf_input.setText(formatted)
+        self.cpf_input.blockSignals(False)
+        
+        # Valida CPF se tiver 11 dígitos
+        if len(numbers) == 11:
+            if self.db_manager.validate_cpf(formatted):
+                self.cpf_input.setProperty("valid", "true")
+            else:
+                self.cpf_input.setProperty("valid", "false")
+            self.cpf_input.setStyleSheet(self.cpf_input.styleSheet())
+
     def format_phone(self):
         """Formata o telefone automaticamente"""
         text = self.phone_input.text()
@@ -363,13 +406,15 @@ class UserDialog(QDialog):
 
     def load_user_data(self):
         """Carrega dados do usuário para edição"""
-        
-        # self.user_id já é um inteiro vindo do UserManagement
         user = self.db_manager.get_user_by_id(self.user_id)
         
         if user:
             self.name_input.setText(user["name"])
             self.email_input.setText(user["email"])
+            
+            # CPF
+            if user.get("cpf"):
+                self.cpf_input.setText(user["cpf"])
 
             if self.user_type == "doctor":
                 self.crm_input.setText(user.get("crm", ""))
@@ -387,6 +432,7 @@ class UserDialog(QDialog):
         name = self.name_input.text().strip()
         email = self.email_input.text().strip()
         password = self.password_input.text()
+        cpf = self.cpf_input.text().strip()
 
         # Validação de nome
         if not name or len(name) < 3:
@@ -396,6 +442,17 @@ class UserDialog(QDialog):
             )
             self.name_input.setFocus()
             return
+
+        # Validação de CPF (se fornecido)
+        if cpf:
+            cpf_numbers = re.sub(r'\D', '', cpf)
+            if len(cpf_numbers) != 11 or not self.db_manager.validate_cpf(cpf):
+                QMessageBox.warning(
+                    self, "❌ Erro de Validação", 
+                    "CPF inválido!\n\nVerifique se o CPF foi digitado corretamente."
+                )
+                self.cpf_input.setFocus()
+                return
 
         # Validação de email
         email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
@@ -427,6 +484,10 @@ class UserDialog(QDialog):
 
         # Dados específicos por tipo
         additional_data = {}
+        
+        # Adiciona CPF se fornecido
+        if cpf:
+            additional_data["cpf"] = cpf
         
         if self.user_type == "doctor":
             crm = self.crm_input.text().strip()
@@ -472,6 +533,8 @@ class UserDialog(QDialog):
 
         # Salvar ou atualizar
         try:
+            current_user_id = self.current_user["id"] if self.current_user else None
+            
             if self.user_id:
                 # Editar usuário existente
                 update_data = {"name": name, "email": email}
@@ -481,7 +544,7 @@ class UserDialog(QDialog):
                 
                 update_data.update(additional_data)
 
-                if self.db_manager.update_user(self.user_id, update_data):
+                if self.db_manager.update_user(self.user_id, update_data, current_user_id):
                     QMessageBox.information(
                         self, "✅ Sucesso", 
                         "Usuário atualizado com sucesso!"
@@ -491,12 +554,12 @@ class UserDialog(QDialog):
                     QMessageBox.warning(
                         self, "❌ Erro", 
                         "Erro ao atualizar usuário!\n\n"
-                        "Verifique se o email já não está em uso."
+                        "Verifique se o email ou CPF já não estão em uso."
                     )
             else:
                 # Criar novo usuário
                 user_id = self.db_manager.create_user(
-                    name, email, password, self.user_type, additional_data
+                    name, email, password, self.user_type, additional_data, current_user_id
                 )
                 
                 if user_id:
@@ -519,7 +582,7 @@ class UserDialog(QDialog):
                     QMessageBox.warning(
                         self, "❌ Erro", 
                         "Erro ao criar usuário!\n\n"
-                        "Verifique se o email já não está em uso."
+                        "Verifique se o email ou CPF já não estão em uso."
                     )
                     
         except Exception as e:

@@ -69,6 +69,7 @@ echo [INFO] Verificando credenciais no .env...
 REM Verifica se alguma das chaves essenciais esta vazia (termina com =)
 (
     findstr /R /C:"^GEMINI_API_KEY=$" ".env" >nul || ^
+    findstr /R /C:"^ENCRYPTION_KEY=$" ".env" >nul || ^
     findstr /R /C:"^POSTGRES_USER=$" ".env" >nul || ^
     findstr /R /C:"^POSTGRES_PASSWORD=$" ".env" >nul || ^
     findstr /R /C:"^POSTGRES_DB=$" ".env" >nul
@@ -77,6 +78,7 @@ if %errorlevel% equ 0 (
     echo [ERRO] Variaveis essenciais nao configuradas no arquivo .env.
     echo [INFO] Por favor, abra o .env e configure no minimo:
     echo        - GEMINI_API_KEY
+    echo        - ENCRYPTION_KEY
     echo        - POSTGRES_USER
     echo        - POSTGRES_PASSWORD
     echo        - POSTGRES_DB

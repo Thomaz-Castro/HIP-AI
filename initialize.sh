@@ -46,8 +46,8 @@ echo "[OK] Arquivo .env encontrado."
 echo ""
 
 echo "[INFO] Verificando credenciais no .env..."
-# --- MELHORIA: Verifica também as variáveis do Postgres ---
 if grep -qE "^GEMINI_API_KEY=$" ".env" || \
+   grep -qE "^ENCRYPTION_KEY=$" ".env" || \
    grep -qE "^POSTGRES_USER=$" ".env" || \
    grep -qE "^POSTGRES_PASSWORD=$" ".env" || \
    grep -qE "^POSTGRES_DB=$" ".env"; then
@@ -55,6 +55,7 @@ if grep -qE "^GEMINI_API_KEY=$" ".env" || \
     echo "[ERRO] Variáveis essenciais não configuradas no arquivo .env."
     echo "[INFO] Por favor, abra o .env e configure no mínimo:"
     echo "       - GEMINI_API_KEY"
+    echo "       - ENCRYPTION_KEY"
     echo "       - POSTGRES_USER"
     echo "       - POSTGRES_PASSWORD"
     echo "       - POSTGRES_DB"
