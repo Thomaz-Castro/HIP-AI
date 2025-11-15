@@ -164,12 +164,21 @@ class UserDialog(QDialog):
         self.name_input.textChanged.connect(self.validate_name)
         form_layout.addRow(name_label_widget, self.name_input)
 
-        # CPF
+        # CPF *
+        cpf_label_widget = QWidget()
+        cpf_label_layout = QHBoxLayout(cpf_label_widget)
+        cpf_label_layout.setContentsMargins(0, 0, 0, 0)
         cpf_label = QLabel("CPF:")
+        cpf_required = QLabel("*")
+        cpf_required.setProperty("class", "required")
+        cpf_label_layout.addWidget(cpf_label)
+        cpf_label_layout.addWidget(cpf_required)
+        cpf_label_layout.addStretch()
+        
         self.cpf_input = QLineEdit()
         self.cpf_input.setPlaceholderText("000.000.000-00")
         self.cpf_input.textChanged.connect(self.format_cpf)
-        form_layout.addRow(cpf_label, self.cpf_input)
+        form_layout.addRow(cpf_label_widget, self.cpf_input)
 
         # Email *
         email_label_widget = QWidget()
@@ -443,16 +452,23 @@ class UserDialog(QDialog):
             self.name_input.setFocus()
             return
 
-        # Validação de CPF (se fornecido)
-        if cpf:
-            cpf_numbers = re.sub(r'\D', '', cpf)
-            if len(cpf_numbers) != 11 or not self.db_manager.validate_cpf(cpf):
-                QMessageBox.warning(
-                    self, "❌ Erro de Validação", 
-                    "CPF inválido!\n\nVerifique se o CPF foi digitado corretamente."
-                )
-                self.cpf_input.setFocus()
-                return
+        # Validação de CPF (OBRIGATÓRIO)
+        if not cpf:
+            QMessageBox.warning(
+                self, "❌ Erro de Validação", 
+                "O CPF é obrigatório!"
+            )
+            self.cpf_input.setFocus()
+            return
+        
+        cpf_numbers = re.sub(r'\D', '', cpf)
+        if len(cpf_numbers) != 11 or not self.db_manager.validate_cpf(cpf):
+            QMessageBox.warning(
+                self, "❌ Erro de Validação", 
+                "CPF inválido!\n\nVerifique se o CPF foi digitado corretamente."
+            )
+            self.cpf_input.setFocus()
+            return
 
         # Validação de email
         email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
@@ -483,11 +499,7 @@ class UserDialog(QDialog):
             return
 
         # Dados específicos por tipo
-        additional_data = {}
-        
-        # Adiciona CPF se fornecido
-        if cpf:
-            additional_data["cpf"] = cpf
+        additional_data = {"cpf": cpf}  # CPF sempre incluído
         
         if self.user_type == "doctor":
             crm = self.crm_input.text().strip()
