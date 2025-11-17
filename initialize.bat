@@ -66,26 +66,37 @@ goto :ask_create_env
 REM --- 3. VALIDACAO DO CONTEUDO DO .ENV ---
 echo [INFO] Verificando credenciais no .env...
 
-REM Verifica se alguma das chaves essenciais esta vazia (termina com =)
-(
-    findstr /R /C:"^GEMINI_API_KEY=$" ".env" >nul || ^
-    findstr /R /C:"^ENCRYPTION_KEY=$" ".env" >nul || ^
-    findstr /R /C:"^POSTGRES_USER=$" ".env" >nul || ^
-    findstr /R /C:"^POSTGRES_PASSWORD=$" ".env" >nul || ^
-    findstr /R /C:"^POSTGRES_DB=$" ".env" >nul
-)
-if %errorlevel% equ 0 (
-    echo [ERRO] Variaveis essenciais nao configuradas no arquivo .env.
-    echo [INFO] Por favor, abra o .env e configure no minimo:
-    echo        - GEMINI_API_KEY
-    echo        - ENCRYPTION_KEY
-    echo        - POSTGRES_USER
-    echo        - POSTGRES_PASSWORD
-    echo        - POSTGRES_DB
-    echo [INFO] Esses campos nao podem ficar vazios.
-    pause
-    exit /b 1
-)
+REM Verifica se alguma das chaves essenciais esta vazia
+findstr /R /C:"^GEMINI_API_KEY=$" ".env" >nul 2>&1
+if %errorlevel% equ 0 goto :env_error
+
+findstr /R /C:"^ENCRYPTION_KEY=$" ".env" >nul 2>&1
+if %errorlevel% equ 0 goto :env_error
+
+findstr /R /C:"^POSTGRES_USER=$" ".env" >nul 2>&1
+if %errorlevel% equ 0 goto :env_error
+
+findstr /R /C:"^POSTGRES_PASSWORD=$" ".env" >nul 2>&1
+if %errorlevel% equ 0 goto :env_error
+
+findstr /R /C:"^POSTGRES_DB=$" ".env" >nul 2>&1
+if %errorlevel% equ 0 goto :env_error
+
+goto :env_ok
+
+:env_error
+echo [ERRO] Variaveis essenciais nao configuradas no arquivo .env.
+echo [INFO] Por favor, abra o .env e configure no minimo:
+echo        - GEMINI_API_KEY
+echo        - ENCRYPTION_KEY
+echo        - POSTGRES_USER
+echo        - POSTGRES_PASSWORD
+echo        - POSTGRES_DB
+echo [INFO] Esses campos nao podem ficar vazios.
+pause
+exit /b 1
+
+:env_ok
 echo [OK] Credenciais de seguranca parecem estar preenchidas.
 echo.
 
@@ -98,52 +109,67 @@ if not exist ".venv\" (
 echo [INFO] Ativando ambiente virtual...
 call .venv\Scripts\activate.bat
 
+echo [INFO] Atualizando pip...
+python -m pip install --upgrade pip --quiet
+
 echo [INFO] Instalando/atualizando dependencias do requirements.txt...
-pip install -r requirements.txt --quiet
+pip install --only-binary :all: -r requirements.txt
 if %errorlevel% neq 0 (
-    echo [ERRO] Falha ao instalar as dependencias Python.
-    pause
-    exit /b 1
+    echo [AVISO] Falha na instalacao automatica. Tentando instalar pacotes individualmente...
+    pip install --only-binary :all: PyQt5==5.15.9
+    pip install --only-binary :all: psycopg2-binary==2.9.11
+    pip install google-generativeai==0.3.2
+    pip install cryptography==41.0.5
+    pip install python-dotenv==1.0.0
+    if %errorlevel% neq 0 (
+        echo [ERRO] Falha ao instalar as dependencias Python.
+        pause
+        exit /b 1
+    )
 )
 echo [OK] Dependencias instaladas.
 echo.
 
 REM --- 5. VERIFICACAO DO DOCKER E BANCO DE DADOS ---
-echo [INFO] Verificando se o Docker esta em execucao...
+echo [INFO] Verificando se o Docker esta instalado...
 docker --version >nul 2>&1
 if %errorlevel% neq 0 (
     echo [ERRO] O comando 'docker' nao foi encontrado!
-    echo [INFO] Por favor, inicie o Docker Desktop.
+    echo [INFO] Instale o Docker Desktop: https://www.docker.com/products/docker-desktop
     pause
     exit /b 1
 )
+echo [OK] Docker instalado.
 
 REM Encontra o comando do Compose (v1 ou v2)
 set "COMPOSE_CMD="
+
 docker-compose --version >nul 2>&1
 if %errorlevel% equ 0 (
     set "COMPOSE_CMD=docker-compose"
-) else (
-    docker compose version >nul 2>&1
-    if %errorlevel% equ 0 (
-        set "COMPOSE_CMD=docker compose"
-    )
+    goto :compose_found
 )
 
-if not defined COMPOSE_CMD (
-    echo [ERRO] 'docker-compose' (v1) ou 'docker compose' (v2) nao foi encontrado!
-    echo [INFO] Verifique sua instalacao do Docker Desktop.
-    pause
-    exit /b 1
+docker compose version >nul 2>&1
+if %errorlevel% equ 0 (
+    set "COMPOSE_CMD=docker compose"
+    goto :compose_found
 )
-echo [OK] Docker e '%COMPOSE_CMD%' encontrados.
+
+echo [ERRO] 'docker-compose' (v1) ou 'docker compose' (v2) nao foi encontrado!
+echo [INFO] Verifique sua instalacao do Docker Desktop.
+pause
+exit /b 1
+
+:compose_found
+echo [OK] Comando '%COMPOSE_CMD%' encontrado.
 echo.
 
-REM 3. Verifica o status do container
+REM Verifica o status do container
 set "CONTAINER_NAME=hip-ai"
 echo [INFO] Verificando status do container do banco de dados: %CONTAINER_NAME%
 
-docker ps -f "name=^/%CONTAINER_NAME%$" -f "status=running" --format "{{.Names}}" | findstr /C:"%CONTAINER_NAME%" >nul
+docker ps -a --filter "name=%CONTAINER_NAME%" --format "{{.Status}}" 2>nul | findstr /C:"Up" >nul 2>&1
 if %errorlevel% equ 0 (
     echo [OK] O container '%CONTAINER_NAME%' ja esta em execucao.
     goto :run_app
@@ -151,6 +177,8 @@ if %errorlevel% equ 0 (
 
 echo [AVISO] Container '%CONTAINER_NAME%' nao esta em execucao.
 echo [INFO] Tentando iniciar o banco de dados com '%COMPOSE_CMD% up -d'...
+echo [INFO] CERTIFIQUE-SE de que o Docker Desktop esta aberto!
+echo.
 
 if not exist "docker-compose.yml" (
     echo [ERRO] Arquivo 'docker-compose.yml' nao encontrado neste diretorio!
@@ -159,10 +187,16 @@ if not exist "docker-compose.yml" (
 )
 
 REM Executa o docker-compose. Ele lera o .env automaticamente.
+echo [INFO] Baixando imagem do Postgres (se necessario) e iniciando container...
 %COMPOSE_CMD% up -d
 if %errorlevel% neq 0 (
+    echo.
     echo [ERRO] Falha ao executar '%COMPOSE_CMD% up -d'!
-    echo [INFO] Verifique se o Docker Desktop esta realmente em execucao.
+    echo [INFO] Certifique-se de que:
+    echo        1. O Docker Desktop esta ABERTO e EM EXECUCAO
+    echo        2. Voce pode ver o icone da baleia na bandeja do sistema
+    echo        3. Tente executar este script como Administrador
+    echo.
     pause
     exit /b 1
 )
@@ -171,7 +205,7 @@ echo [INFO] Aguardando o banco de dados (Postgres) inicializar...
 timeout /t 8 /nobreak >nul
 
 REM Verificacao final
-docker ps -f "name=^/%CONTAINER_NAME%$" -f "status=running" --format "{{.Names}}" | findstr /C:"%CONTAINER_NAME%" >nul
+docker ps --filter "name=%CONTAINER_NAME%" --format "{{.Status}}" 2>nul | findstr /C:"Up" >nul 2>&1
 if %errorlevel% equ 0 (
     echo [OK] Container '%CONTAINER_NAME%' iniciado com sucesso!
 ) else (
