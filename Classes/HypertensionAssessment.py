@@ -1066,7 +1066,7 @@ class HypertensionAssessment(QWidget):
 
         try:
             genai.configure(api_key=API_KEY)
-            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            model = genai.GenerativeModel('gemini-2.0-flash')
             chat = model.start_chat(history=[])
             
             auto = data["avaliacaoagil"]
@@ -1219,7 +1219,8 @@ RESPONDA APENAS COM O RELATÓRIO NO FORMATO ESPECIFICADO ACIMA.
             
             user_info = {
                 "name": self.user["name"],
-                "user_type": self.user.get("user_type", "patient")
+                "user_type": self.user.get("user_type", "patient"),
+                "crm": self.user.get("crm", ""),
             }
             
             # Pega nome do paciente do label

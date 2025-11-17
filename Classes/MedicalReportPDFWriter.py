@@ -5,6 +5,9 @@ from reportlab.lib import colors
 from datetime import datetime
 from PyQt5.QtWidgets import QFileDialog
 import os
+import subprocess
+import sys
+import platform
 
 
 class MedicalReportPDFWriter:
@@ -47,6 +50,22 @@ class MedicalReportPDFWriter:
         )
         
         return filename if filename else None
+
+    def open_pdf(self, filepath):
+        """
+        Abre o PDF com o visualizador padrão do sistema operacional
+        """
+        try:
+            if platform.system() == 'Windows':
+                os.startfile(filepath)
+            elif platform.system() == 'Darwin':  # macOS
+                subprocess.run(['open', filepath], check=True)
+            else:  # Linux e outros Unix
+                subprocess.run(['xdg-open', filepath], check=True)
+            print(f"PDF aberto: {filepath}")
+        except Exception as e:
+            print(f"Não foi possível abrir o PDF automaticamente: {e}")
+            print(f"Por favor, abra manualmente: {filepath}")
 
     def draw_title(self):
         """Desenha o título principal"""
@@ -187,6 +206,7 @@ class MedicalReportPDFWriter:
         """
         Gera o PDF com os dados fornecidos
         Abre diálogo para o usuário escolher onde salvar
+        Abre automaticamente o PDF após salvar
         Retorna o caminho do arquivo salvo ou None se cancelado
         """
         self.filename = self.get_save_filename(patient_name)
@@ -206,8 +226,9 @@ class MedicalReportPDFWriter:
         y_pos = self.draw_section_header("INFORMAÇÕES DO PROFISSIONAL E PACIENTE", y_pos)
         y_pos = self.draw_field_row(y_pos, [
             {'label': 'Médico', 'value': user_info.get('name', '')},
+            {'label': 'CRM', 'value': user_info.get('crm', '')},
             {'label': 'Paciente', 'value': patient_name or 'N/A'}
-        ], widths=[0.5, 0.5])
+        ], widths=[0.4, 0.25, 0.35])
 
         # AVALIAÇÃO ÁGIL
         y_pos -= 2 * mm
@@ -305,6 +326,10 @@ class MedicalReportPDFWriter:
 
         self.c.save()
         print(f"PDF gerado com sucesso: {self.filename}")
+        
+        # Abre o PDF automaticamente
+        self.open_pdf(self.filename)
+        
         return self.filename
 
 
@@ -369,7 +394,7 @@ Data da Avaliação: 09/10/2025 23:14
 IMPORTANTE: Esta avaliação é apenas informativa. 
 Consulte sempre um médico para diagnóstico e tratamento adequados."""
     }
-    user_info = {'name': 'Dr. João Silva'}
+    user_info = {'name': 'Dr. João Silva', 'crm': '123.456.789'}
     patient_name = 'Carlos Santos'
     
     from PyQt5.QtWidgets import QApplication
