@@ -18,7 +18,83 @@ if %errorlevel% neq 0 (
     pause
     exit /b 1
 )
-echo [OK] Python encontrado.
+
+REM Verificar versão do Python
+echo [INFO] Verificando versao do Python...
+for /f "tokens=2" %%i in ('python --version 2^>^&1') do set PYTHON_VERSION=%%i
+echo [INFO] Versao padrão encontrada: %PYTHON_VERSION%
+
+REM Extrair versão principal (3.12, 3.13, etc)
+for /f "tokens=1,2 delims=." %%a in ("%PYTHON_VERSION%") do (
+    set MAJOR=%%a
+    set MINOR=%%b
+)
+
+REM Tentar encontrar uma versão compatível
+set "PYTHON_CMD="
+set "FOUND_VERSION="
+
+echo [INFO] Procurando versao compativel de Python (3.11 ou 3.12)...
+
+REM Tentar Python 3.12
+py -3.12 --version >nul 2>&1
+if %errorlevel% equ 0 (
+    echo [OK] Python 3.12 encontrado!
+    set "PYTHON_CMD=py -3.12"
+    set "FOUND_VERSION=3.12"
+    goto :python_ok
+)
+
+REM Tentar Python 3.11
+py -3.11 --version >nul 2>&1
+if %errorlevel% equ 0 (
+    echo [OK] Python 3.11 encontrado!
+    set "PYTHON_CMD=py -3.11"
+    set "FOUND_VERSION=3.11"
+    goto :python_ok
+)
+
+REM Tentar Python 3.10
+py -3.10 --version >nul 2>&1
+if %errorlevel% equ 0 (
+    echo [OK] Python 3.10 encontrado!
+    set "PYTHON_CMD=py -3.10"
+    set "FOUND_VERSION=3.10"
+    goto :python_ok
+)
+
+REM Verificar se a versão padrão é compatível (3.10, 3.11 ou 3.12)
+if %MAJOR% equ 3 (
+    if %MINOR% geq 10 if %MINOR% leq 13 (
+        echo [OK] Python %PYTHON_VERSION% e compativel!
+        set "PYTHON_CMD=python"
+        set "FOUND_VERSION=%PYTHON_VERSION%"
+        goto :python_ok
+    )
+)
+
+REM Nenhuma versão compatível encontrada
+echo.
+echo [ERRO] Nenhuma versao compativel de Python foi encontrada!
+echo [INFO] Este sistema requer Python 3.10, 3.11, 3.12 ou 3.13
+echo [INFO] Python 3.14+ ainda nao e compativel com as bibliotecas necessarias.
+echo.
+echo [INFO] Para instalar Python 3.12 (recomendado):
+echo        1. Acesse: https://www.python.org/downloads/release/python-3120/
+echo        2. Baixe o instalador para Windows (64-bit)
+echo        3. Durante a instalacao, MARQUE "Add Python to PATH"
+echo        4. Execute este script novamente
+echo.
+echo [INFO] Versoes disponiveis para download:
+echo        - Python 3.12: https://www.python.org/ftp/python/3.12.0/python-3.12.0-amd64.exe
+echo        - Python 3.11: https://www.python.org/ftp/python/3.11.0/python-3.11.0-amd64.exe
+echo.
+pause
+exit /b 1
+
+:python_ok
+echo [OK] Usando Python %FOUND_VERSION%
+echo [INFO] Comando: %PYTHON_CMD%
 echo.
 
 REM --- 2. VERIFICACAO DO ARQUIVO .ENV ---
@@ -103,24 +179,44 @@ echo.
 REM --- 4. AMBIENTE VIRTUAL E DEPENDENCIAS ---
 if not exist ".venv\" (
     echo [INFO] Ambiente virtual nao encontrado. Criando .venv...
-    python -m venv .venv
+    echo [INFO] Usando: %PYTHON_CMD%
+    %PYTHON_CMD% -m venv .venv
+    if %errorlevel% neq 0 (
+        echo [ERRO] Falha ao criar ambiente virtual!
+        echo [INFO] Tente executar manualmente: %PYTHON_CMD% -m venv .venv
+        pause
+        exit /b 1
+    )
+    echo [OK] Ambiente virtual criado com sucesso!
 )
 
 echo [INFO] Ativando ambiente virtual...
 call .venv\Scripts\activate.bat
 
+echo [INFO] Verificando versao do Python no ambiente virtual...
+python --version
+
 echo [INFO] Atualizando pip...
 python -m pip install --upgrade pip --quiet
 
-echo [INFO] Instalando/atualizando dependencias do requirements.txt...
-pip install --only-binary :all: -r requirements.txt
+echo [INFO] Instalando/atualizando dependencias do pip-requirements...
+if exist "pip-requirements" (
+    pip install -r pip-requirements
+) else if exist "requirements.txt" (
+    pip install -r requirements.txt
+) else (
+    echo [AVISO] Arquivo de requisitos nao encontrado. Instalando pacotes individualmente...
+)
+
 if %errorlevel% neq 0 (
     echo [AVISO] Falha na instalacao automatica. Tentando instalar pacotes individualmente...
-    pip install --only-binary :all: PyQt5==5.15.9
-    pip install --only-binary :all: psycopg2-binary==2.9.11
-    pip install google-generativeai==0.3.2
+    pip install PyQt5==5.15.9
+    pip install psycopg2-binary==2.9.11
+    pip install protobuf==4.25.3
+    pip install google-generativeai==0.8.3
     pip install cryptography==41.0.5
     pip install python-dotenv==1.0.0
+    pip install reportlab==4.4.5
     if %errorlevel% neq 0 (
         echo [ERRO] Falha ao instalar as dependencias Python.
         pause

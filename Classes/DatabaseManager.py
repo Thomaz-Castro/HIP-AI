@@ -111,7 +111,7 @@ class DatabaseManager:
                     birth_date DATE,
                     phone VARCHAR(20),
                     
-                    -- Soft delete e auditoria
+                    -- Soft delete
                     is_active BOOLEAN DEFAULT TRUE,
                     
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -147,7 +147,6 @@ class DatabaseManager:
                 CREATE INDEX IF NOT EXISTS idx_reports_doctor ON reports(doctor_id);
                 CREATE INDEX IF NOT EXISTS idx_reports_patient ON reports(patient_id);
                 CREATE INDEX IF NOT EXISTS idx_reports_created ON reports(created_at);
-                CREATE INDEX IF NOT EXISTS idx_reports_active ON reports(is_active);
             """)
             
             # Trigger para atualizar updated_at automaticamente
@@ -377,9 +376,9 @@ class DatabaseManager:
             cursor = conn.cursor()
             cursor.execute("""
                 UPDATE users 
-                SET is_active = FALSE, deleted_at = CURRENT_TIMESTAMP, deleted_by = %s
+                SET is_active = FALSE
                 WHERE id = %s AND user_type IN ('doctor', 'patient')
-            """, (deleted_by, user_id))
+            """, (user_id,))
             
             rows_affected = cursor.rowcount
             conn.commit()
@@ -400,7 +399,7 @@ class DatabaseManager:
             cursor = conn.cursor()
             cursor.execute("""
                 UPDATE users 
-                SET is_active = TRUE, deleted_at = NULL, deleted_by = NULL
+                SET is_active = TRUE
                 WHERE id = %s
             """, (user_id,))
             
@@ -444,10 +443,10 @@ class DatabaseManager:
             encrypted_data = self.encrypt_data(report_data)
             
             cursor.execute("""
-                INSERT INTO reports (doctor_id, patient_id, report_data_encrypted, is_active)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO reports (doctor_id, patient_id, report_data_encrypted)
+                VALUES (%s, %s, %s)
                 RETURNING id
-            """, (doctor_id, patient_id, encrypted_data, True))
+            """, (doctor_id, patient_id, encrypted_data))
             
             report_id = cursor.fetchone()[0]
             conn.commit()
@@ -469,19 +468,14 @@ class DatabaseManager:
         try:
             cursor = conn.cursor(cursor_factory=RealDictCursor)
             
-            if include_inactive:
-                where_clause = "WHERE r.patient_id = %s"
-            else:
-                where_clause = "WHERE r.patient_id = %s AND r.is_active = TRUE"
-            
-            cursor.execute(f"""
+            cursor.execute("""
                 SELECT r.*, 
                        row_to_json(d.*) as doctor,
                        row_to_json(p.*) as patient
                 FROM reports r
                 LEFT JOIN users d ON r.doctor_id = d.id
                 LEFT JOIN users p ON r.patient_id = p.id
-                {where_clause}
+                WHERE r.patient_id = %s
                 ORDER BY r.created_at DESC
             """, (patient_id,))
             
@@ -521,19 +515,14 @@ class DatabaseManager:
         try:
             cursor = conn.cursor(cursor_factory=RealDictCursor)
             
-            if include_inactive:
-                where_clause = "WHERE r.doctor_id = %s"
-            else:
-                where_clause = "WHERE r.doctor_id = %s AND r.is_active = TRUE"
-            
-            cursor.execute(f"""
+            cursor.execute("""
                 SELECT r.*,
                        row_to_json(d.*) as doctor,
                        row_to_json(p.*) as patient
                 FROM reports r
                 LEFT JOIN users d ON r.doctor_id = d.id
                 LEFT JOIN users p ON r.patient_id = p.id
-                {where_clause}
+                WHERE r.doctor_id = %s
                 ORDER BY r.created_at DESC
             """, (doctor_id,))
             
@@ -555,16 +544,13 @@ class DatabaseManager:
         try:
             cursor = conn.cursor(cursor_factory=RealDictCursor)
             
-            where_clause = "" if include_inactive else "WHERE r.is_active = TRUE"
-            
-            cursor.execute(f"""
+            cursor.execute("""
                 SELECT r.*,
-                       COALESCE(row_to_json(d.*), '{{"name": "Médico não encontrado"}}'::json) as doctor,
-                       COALESCE(row_to_json(p.*), '{{"name": "Paciente não encontrado"}}'::json) as patient
+                       COALESCE(row_to_json(d.*), '{"name": "Médico não encontrado"}'::json) as doctor,
+                       COALESCE(row_to_json(p.*), '{"name": "Paciente não encontrado"}'::json) as patient
                 FROM reports r
                 LEFT JOIN users d ON r.doctor_id = d.id
                 LEFT JOIN users p ON r.patient_id = p.id
-                {where_clause}
                 ORDER BY r.created_at DESC
             """)
             
@@ -587,7 +573,7 @@ class DatabaseManager:
             cursor = conn.cursor(cursor_factory=RealDictCursor)
             cursor.execute("""
                 SELECT * FROM reports 
-                WHERE patient_id = %s AND is_active = TRUE
+                WHERE patient_id = %s
                 ORDER BY created_at DESC 
                 LIMIT 1
             """, (patient_id,))

@@ -9,8 +9,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QFont, QIntValidator
 from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal
-from google import genai
-from google.genai import types
+import google.generativeai as genai
 from Classes.MedicalReportPDFWriter import MedicalReportPDFWriter
 
 # --- HELPER CLASSES PARA POPUP E THREADING ---
@@ -1066,11 +1065,9 @@ class HypertensionAssessment(QWidget):
              return "Erro: GEMINI_API_KEY não configurada no ambiente."
 
         try:
-            gemini = genai.Client(
-                api_key=API_KEY, 
-                http_options=types.HttpOptions(api_version="v1alpha")
-            )
-            chat = gemini.chats.create(model="gemini-2.0-flash")
+            genai.configure(api_key=API_KEY)
+            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            chat = model.start_chat(history=[])
             
             auto = data["avaliacaoagil"]
             exames = data.get("exames")
