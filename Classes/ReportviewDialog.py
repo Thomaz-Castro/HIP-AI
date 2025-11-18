@@ -426,17 +426,23 @@ class ReportViewDialog(QDialog):
             }
             
             # Informações do médico
+            doctor_data = self.report.get("doctor", {})
             user_info = {
-                "name": self.report.get("doctor", {}).get("name", "N/A"),
+                "name": doctor_data.get("name", "N/A"),
+                "crm": doctor_data.get("crm", "N/A"),
                 "user_type": "doctor"
             }
             
-            # Nome do paciente
-            patient_name = self.report.get("patient", {}).get("name", None)
+            # Dados do paciente (nome e CPF)
+            patient_dict = self.report.get("patient", {})
+            patient_data = {
+                "name": patient_dict.get("name", "N/A"),
+                "cpf": patient_dict.get("cpf", "N/A")
+            }
             
             # Gera o PDF (agora com diálogo de salvamento)
             generator = MedicalReportPDFWriter()
-            filename = generator.generate_pdf(data, user_info, patient_name)
+            filename = generator.generate_pdf(data, user_info, patient_data)
             
             # Verifica se o usuário não cancelou
             if filename:
