@@ -1223,16 +1223,25 @@ RESPONDA APENAS COM O RELATÓRIO NO FORMATO ESPECIFICADO ACIMA.
                 "crm": self.user.get("crm", ""),
             }
             
-            # Pega nome do paciente do label
-            patient_name = None
+            # Monta dados do paciente com nome e CPF
+            patient_data = None
             if self.user["user_type"] == "doctor" and self.selected_patient_id:
-                patient_name = self.patient_name_label.text()
+                # Busca dados completos do paciente
+                patient = self.db_manager.get_user_by_id(self.selected_patient_id)
+                if patient:
+                    patient_data = {
+                        "name": patient.get("name"),
+                        "cpf": patient.get("cpf", "N/A")
+                    }
             elif self.user["user_type"] == "patient":
-                patient_name = self.user["name"]
+                patient_data = {
+                    "name": self.user["name"],
+                    "cpf": self.user.get("cpf", "N/A")
+                }
             
             # Gera o PDF
             generator = MedicalReportPDFWriter()
-            filename = generator.generate_pdf(data, user_info, patient_name)
+            filename = generator.generate_pdf(data, user_info, patient_data)
         
             if filename:
                 QMessageBox.information(

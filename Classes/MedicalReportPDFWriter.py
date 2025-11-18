@@ -23,13 +23,14 @@ class MedicalReportPDFWriter:
         self.width, self.height = A4
         self.margin = 15 * mm
 
-    def get_save_filename(self, patient_name=None):
+    def get_save_filename(self, patient_data=None):
         """
         Abre diálogo para selecionar local e nome do arquivo
         Retorna o caminho completo ou None se cancelado
         """
         hoje = datetime.now().strftime("%Y%m%d_%H%M%S")
-        if patient_name:
+        if patient_data and patient_data.get('name'):
+            patient_name = patient_data.get('name')
             safe_name = "".join(c for c in patient_name if c.isalnum() or c in (' ', '-', '_'))
             safe_name = safe_name.replace(' ', '_')
             suggested_name = f"Relatorio_Hipertensao_{safe_name}_{hoje}.pdf"
@@ -202,14 +203,14 @@ class MedicalReportPDFWriter:
         
         return y_pos - box_height
 
-    def generate_pdf(self, data, user_info, patient_name=None):
+    def generate_pdf(self, data, user_info, patient_data=None):
         """
         Gera o PDF com os dados fornecidos
         Abre diálogo para o usuário escolher onde salvar
         Abre automaticamente o PDF após salvar
         Retorna o caminho do arquivo salvo ou None se cancelado
         """
-        self.filename = self.get_save_filename(patient_name)
+        self.filename = self.get_save_filename(patient_data)
         
         if not self.filename:
             return None
@@ -224,11 +225,20 @@ class MedicalReportPDFWriter:
         # INFORMAÇÕES GERAIS
         y_pos -= 4 * mm
         y_pos = self.draw_section_header("INFORMAÇÕES DO PROFISSIONAL E PACIENTE", y_pos)
+        
+        # Primeira linha: Médico e CRM
         y_pos = self.draw_field_row(y_pos, [
             {'label': 'Médico', 'value': user_info.get('name', '')},
-            {'label': 'CRM', 'value': user_info.get('crm', '')},
-            {'label': 'Paciente', 'value': patient_name or 'N/A'}
-        ], widths=[0.4, 0.25, 0.35])
+            {'label': 'CRM', 'value': user_info.get('crm', '')}
+        ], widths=[0.65, 0.35])
+        
+        # Segunda linha: Paciente e CPF
+        patient_name = patient_data.get('name', 'N/A') if patient_data else 'N/A'
+        patient_cpf = patient_data.get('cpf', 'N/A') if patient_data else 'N/A'
+        y_pos = self.draw_field_row(y_pos, [
+            {'label': 'Paciente', 'value': patient_name},
+            {'label': 'CPF', 'value': patient_cpf}
+        ], widths=[0.65, 0.35])
 
         # AVALIAÇÃO ÁGIL
         y_pos -= 2 * mm
@@ -395,14 +405,14 @@ IMPORTANTE: Esta avaliação é apenas informativa.
 Consulte sempre um médico para diagnóstico e tratamento adequados."""
     }
     user_info = {'name': 'Dr. João Silva', 'crm': '123.456.789'}
-    patient_name = 'Carlos Santos'
+    patient_data = {'name': 'Carlos Santos', 'cpf': '123.456.789-00'}
     
     from PyQt5.QtWidgets import QApplication
     import sys
     
     app = QApplication(sys.argv)
     relatorio = MedicalReportPDFWriter()
-    filename = relatorio.generate_pdf(data, user_info, patient_name)
+    filename = relatorio.generate_pdf(data, user_info, patient_data)
     
     if filename:
         print(f"PDF salvo em: {filename}")
