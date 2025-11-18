@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (
     QPlainTextEdit, QHBoxLayout, QLineEdit, QScrollArea,
     QMessageBox, QFrame, QDialog, QProgressBar
 )
-from PyQt5.QtGui import QFont, QIntValidator
+from PyQt5.QtGui import QFont, QIntValidator, QDoubleValidator
 from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal
 import google.generativeai as genai
 from Classes.MedicalReportPDFWriter import MedicalReportPDFWriter
@@ -194,6 +194,82 @@ class CPFLineEdit(QLineEdit):
         return len(cpf) == 11 and self.is_valid_cpf(cpf)
 
 
+# --- CLASSES PERSONALIZADAS PARA INPUTS VALIDADOS ---
+
+class ValidatedLineEdit(QLineEdit):
+    """QLineEdit com validação e placeholder personalizado"""
+    def __init__(self, validator_type="int", min_val=0, max_val=999999, decimals=0, unit="", parent=None):
+        super().__init__(parent)
+        self.unit = unit
+        self.validator_type = validator_type
+        
+        # Configura validador
+        if validator_type == "int":
+            validator = QIntValidator(min_val, max_val, self)
+            self.setValidator(validator)
+            self.setPlaceholderText(f"0-{max_val}")
+        elif validator_type == "double":
+            validator = QDoubleValidator(min_val, max_val, decimals, self)
+            validator.setNotation(QDoubleValidator.StandardNotation)
+            self.setValidator(validator)
+            self.setPlaceholderText(f"0.0-{max_val}")
+        
+        self.setMinimumHeight(35)
+        self.setAlignment(Qt.AlignRight)
+    
+    def get_value(self):
+        """Retorna o valor numérico do campo"""
+        text = self.text().strip()
+        if not text:
+            return 0
+        try:
+            if self.validator_type == "int":
+                return int(text)
+            else:
+                return float(text)
+        except:
+            return 0
+    
+    def set_value(self, value):
+        """Define o valor do campo"""
+        if value == 0:
+            self.clear()
+        else:
+            if self.validator_type == "int":
+                self.setText(str(int(value)))
+            else:
+                self.setText(str(value))
+
+
+def create_labeled_input(label_text, input_widget, unit=""):
+    """Cria um container com label e input lado a lado"""
+    container = QFrame()
+    layout = QHBoxLayout(container)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(10)
+    
+    label = QLabel(label_text)
+    label.setStyleSheet("font-weight: bold; color: #34495e; min-width: 150px;")
+    label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+    layout.addWidget(label)
+    
+    # Verifica se é um layout ou widget
+    if isinstance(input_widget, QHBoxLayout):
+        # Se for layout, adiciona ao layout principal
+        layout.addLayout(input_widget, 1)
+    else:
+        # Se for widget, adiciona normalmente
+        layout.addWidget(input_widget, 1)
+    
+    if unit:
+        unit_label = QLabel(unit)
+        unit_label.setStyleSheet("color: #7f8c8d; font-style: italic;")
+        unit_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        layout.addWidget(unit_label)
+    
+    return container
+
+
 # --- CLASSE PRINCIPAL DA TELA ---
 
 class HypertensionAssessment(QWidget):
@@ -263,7 +339,7 @@ class HypertensionAssessment(QWidget):
                 padding: 2px;
             }
             
-            QSpinBox, QDoubleSpinBox, QComboBox, QLineEdit {
+            QLineEdit {
                 border: 2px solid #bdc3c7;
                 border-radius: 6px;
                 padding: 8px 12px;
@@ -272,13 +348,19 @@ class HypertensionAssessment(QWidget):
                 min-height: 20px;
             }
             
-            QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus, QLineEdit:focus {
+            QLineEdit:focus {
                 border-color: #3498db;
                 outline: none;
             }
             
-            QSpinBox:hover, QDoubleSpinBox:hover, QComboBox:hover {
+            QLineEdit:hover {
                 border-color: #5dade2;
+            }
+            
+            QLineEdit[readOnly="true"] {
+                background-color: #ecf0f1;
+                color: #2c3e50;
+                font-weight: bold;
             }
             
             QCheckBox {
@@ -415,37 +497,56 @@ class HypertensionAssessment(QWidget):
         # --- SELEÇÃO DE PACIENTE (Req 1) ---
         if self.user["user_type"] == "doctor":
             patient_group = QGroupBox("👤 Seleção de Paciente")
-            patient_layout = QFormLayout()
+            patient_layout = QVBoxLayout()
             patient_layout.setSpacing(15)
-            patient_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
             
-            # Layout de busca (CPF + Botão)
-            search_layout = QHBoxLayout()
-            search_layout.setSpacing(10)
+            # Container para busca de CPF
+            search_container = QFrame()
+            search_main_layout = QHBoxLayout(search_container)
+            search_main_layout.setContentsMargins(0, 0, 0, 0)
+            search_main_layout.setSpacing(10)
+            
+            # Label
+            cpf_label = QLabel("Buscar por CPF:")
+            cpf_label.setStyleSheet("font-weight: bold; color: #34495e; min-width: 150px;")
+            cpf_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            search_main_layout.addWidget(cpf_label)
             
             # Usa o CPFLineEdit personalizado
             self.cpf_input = CPFLineEdit()
             self.cpf_input.setMinimumHeight(35)
             self.cpf_input.returnPressed.connect(self.search_patient_by_cpf)  # Enter para buscar
-            search_layout.addWidget(self.cpf_input, 3)
+            search_main_layout.addWidget(self.cpf_input, 3)
             
             self.search_patient_btn = QPushButton("🔍 Buscar")
             self.search_patient_btn.setMinimumHeight(35)
             self.search_patient_btn.clicked.connect(self.search_patient_by_cpf)
-            search_layout.addWidget(self.search_patient_btn, 1)
+            search_main_layout.addWidget(self.search_patient_btn, 1)
             
-            patient_layout.addRow(self.create_bold_label("Buscar por CPF:"), search_layout)
+            patient_layout.addWidget(search_container)
             
             # Label de validação do CPF
             self.cpf_validation_label = QLabel("")
-            self.cpf_validation_label.setStyleSheet("font-size: 9pt; font-style: italic;")
+            self.cpf_validation_label.setStyleSheet("font-size: 9pt; font-style: italic; padding-left: 160px;")
             self.cpf_validation_label.setWordWrap(True)
-            patient_layout.addRow("", self.cpf_validation_label)
+            patient_layout.addWidget(self.cpf_validation_label)
             
             # Conecta mudanças no CPF para atualizar mensagem de validação
             self.cpf_input.textChanged.connect(self.update_cpf_validation_message)
             
             # Label para nome do paciente com ícone de status
+            patient_info_container = QFrame()
+            patient_info_main_layout = QHBoxLayout(patient_info_container)
+            patient_info_main_layout.setContentsMargins(0, 0, 0, 0)
+            patient_info_main_layout.setSpacing(10)
+            
+            # Label "Paciente:"
+            patient_label = QLabel("Paciente:")
+            patient_label.setStyleSheet("font-weight: bold; color: #34495e; min-width: 150px;")
+            patient_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            patient_info_main_layout.addWidget(patient_label)
+            
+            # Frame com informações do paciente
             patient_info_frame = QFrame()
             patient_info_frame.setStyleSheet("""
                 QFrame {
@@ -467,126 +568,84 @@ class HypertensionAssessment(QWidget):
             self.patient_name_label.setWordWrap(True)
             patient_info_layout.addWidget(self.patient_name_label, 1)
             
-            patient_layout.addRow(self.create_bold_label("Paciente:"), patient_info_frame)
+            patient_info_main_layout.addWidget(patient_info_frame, 1)
+            
+            patient_layout.addWidget(patient_info_container)
             
             patient_group.setLayout(patient_layout)
             content_layout.addWidget(patient_group)
 
         # --- SUBDIVISÃO 1: DADOS DEMOGRÁFICOS (Req 2) ---
         demo_gbox = QGroupBox("ℹ️ Dados Demográficos")
-        demo_form = QFormLayout()
-        demo_form.setSpacing(15)
-        demo_form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        demo_layout = QVBoxLayout()
+        demo_layout.setSpacing(15)
         
         # Idade (calculada, read-only)
         self.idade = QLineEdit()
         self.idade.setReadOnly(True)
-        self.idade.setStyleSheet("""
-            QLineEdit[readOnly="true"] {
-                background-color: #ecf0f1;
-                color: #2c3e50;
-                font-weight: bold;
-            }
-        """)
         self.idade.setMinimumHeight(35)
         self.idade.setPlaceholderText("Selecione um paciente")
-        demo_form.addRow(self.create_bold_label("Idade:"), self.idade)
+        demo_layout.addWidget(create_labeled_input("Idade:", self.idade, "anos"))
 
         self.sexo_m = QCheckBox("Masculino")
         self.sexo_m.setStyleSheet("QCheckBox { font-weight: bold; }")
-        demo_form.addRow(self.create_bold_label("Sexo:"), self.sexo_m)
+        demo_layout.addWidget(create_labeled_input("Sexo:", self.sexo_m))
 
         self.hist_fam = QCheckBox("Sim")
-        demo_form.addRow(self.create_bold_label("Histórico familiar de hipertensão:"), self.hist_fam)
+        demo_layout.addWidget(create_labeled_input("Histórico familiar de hipertensão:", self.hist_fam))
         
-        demo_gbox.setLayout(demo_form)
+        demo_gbox.setLayout(demo_layout)
         content_layout.addWidget(demo_gbox)
         
         # --- SUBDIVISÃO 2: MEDIDAS FÍSICAS (Req 2) ---
         measures_gbox = QGroupBox("📏 Medidas Físicas")
-        measures_form = QFormLayout()
-        measures_form.setSpacing(15)
-        measures_form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
-
-        measures_frame = QFrame()
-        measures_layout = QHBoxLayout(measures_frame)
-        measures_layout.setSpacing(10)
-        measures_layout.setContentsMargins(0,0,0,0)
+        measures_layout = QVBoxLayout()
+        measures_layout.setSpacing(15)
         
-        self.altura = QDoubleSpinBox()
-        self.altura.setRange(50, 250)
-        self.altura.setSuffix(" cm")
-        self.altura.setMinimumHeight(35)
+        # Altura
+        self.altura = ValidatedLineEdit("double", 50, 250, 1)
+        measures_layout.addWidget(create_labeled_input("Altura:", self.altura, "cm"))
         
-        self.peso = QDoubleSpinBox()
-        self.peso.setRange(10, 300)
-        self.peso.setDecimals(1)
-        self.peso.setSuffix(" kg")
-        self.peso.setMinimumHeight(35)
+        # Peso
+        self.peso = ValidatedLineEdit("double", 10, 300, 1)
+        measures_layout.addWidget(create_labeled_input("Peso:", self.peso, "kg"))
         
+        # IMC (calculado)
         self.imc = QLineEdit()
         self.imc.setReadOnly(True)
-        self.imc.setStyleSheet("""
-            QLineEdit[readOnly="true"] {
-                background-color: #ecf0f1;
-                color: #2c3e50;
-                font-weight: bold;
-            }
-        """)
         self.imc.setMinimumHeight(35)
+        measures_layout.addWidget(create_labeled_input("IMC:", self.imc, "kg/m²"))
         
-        measures_layout.addWidget(QLabel("Altura:"))
-        measures_layout.addWidget(self.altura)
-        measures_layout.addWidget(QLabel("Peso:"))
-        measures_layout.addWidget(self.peso)
-        measures_layout.addWidget(QLabel("IMC:"))
-        measures_layout.addWidget(self.imc)
+        self.altura.textChanged.connect(self.calcular_imc)
+        self.peso.textChanged.connect(self.calcular_imc)
         
-        measures_form.addRow(measures_frame)
-        
-        self.altura.valueChanged.connect(self.calcular_imc)
-        self.peso.valueChanged.connect(self.calcular_imc)
-        
-        measures_gbox.setLayout(measures_form)
+        measures_gbox.setLayout(measures_layout)
         content_layout.addWidget(measures_gbox)
 
         # --- SUBDIVISÃO 3: ESTILO DE VIDA E HÁBITOS (Req 2) ---
         habits_gbox = QGroupBox("🥗 Estilo de Vida e Hábitos")
-        habits_form = QFormLayout()
-        habits_form.setSpacing(15)
-        habits_form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        habits_layout = QVBoxLayout()
+        habits_layout.setSpacing(15)
 
-        self.frutas = QSpinBox()
-        self.frutas.setRange(0, 20)
-        self.frutas.setSuffix(" porções/dia")
-        self.frutas.setMinimumHeight(35)
-        habits_form.addRow(self.create_bold_label("Frutas/Vegetais por dia:"), self.frutas)
+        self.frutas = ValidatedLineEdit("int", 0, 20)
+        habits_layout.addWidget(create_labeled_input("Frutas/Vegetais por dia:", self.frutas, "porções/dia"))
 
-        self.exercicio = QSpinBox()
-        self.exercicio.setRange(0, 10000)
-        self.exercicio.setSuffix(" min/semana")
-        self.exercicio.setMinimumHeight(35)
-        habits_form.addRow(self.create_bold_label("Exercício por semana:"), self.exercicio)
+        self.exercicio = ValidatedLineEdit("int", 0, 10000)
+        habits_layout.addWidget(create_labeled_input("Exercício por semana:", self.exercicio, "min/semana"))
 
         self.fuma = QCheckBox("Sim")
-        habits_form.addRow(self.create_bold_label("Fumante:"), self.fuma)
+        habits_layout.addWidget(create_labeled_input("Fumante:", self.fuma))
 
-        self.alcool = QSpinBox()
-        self.alcool.setRange(0, 100)
-        self.alcool.setSuffix(" doses/semana")
-        self.alcool.setMinimumHeight(35)
-        habits_form.addRow(self.create_bold_label("Bebidas alcoólicas:"), self.alcool)
+        self.alcool = ValidatedLineEdit("int", 0, 100)
+        habits_layout.addWidget(create_labeled_input("Bebidas alcoólicas:", self.alcool, "doses/semana"))
 
-        self.estresse = QSpinBox()
-        self.estresse.setRange(0, 10)
-        self.estresse.setSuffix(" (0=baixo, 10=alto)")
-        self.estresse.setMinimumHeight(35)
-        habits_form.addRow(self.create_bold_label("Nível de estresse:"), self.estresse)
+        self.estresse = ValidatedLineEdit("int", 0, 10)
+        habits_layout.addWidget(create_labeled_input("Nível de estresse:", self.estresse, "(0=baixo, 10=alto)"))
 
         self.sono = QCheckBox("Sim")
-        habits_form.addRow(self.create_bold_label("Qualidade do sono ruim:"), self.sono)
+        habits_layout.addWidget(create_labeled_input("Qualidade do sono ruim:", self.sono))
 
-        habits_gbox.setLayout(habits_form)
+        habits_gbox.setLayout(habits_layout)
         content_layout.addWidget(habits_gbox)
 
         # --- Exames Médicos opcionais ---
@@ -606,84 +665,52 @@ class HypertensionAssessment(QWidget):
         content_layout.addWidget(self.chk_exames)
 
         self.exame_gbox = QGroupBox("🔬 Exames Médicos (Opcional)")
-        exame_form = QFormLayout()
-        exame_form.setSpacing(15)
-        exame_form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
-
-        def make_spin(maxv, suffix="", decimal_places=1):
-            sb = QDoubleSpinBox()
-            sb.setRange(0, maxv)
-            sb.setDecimals(decimal_places)
-            sb.setSuffix(suffix)
-            sb.setSpecialValueText("não informado")
-            sb.setMinimumHeight(35)
-            return sb
+        exame_layout = QVBoxLayout()
+        exame_layout.setSpacing(15)
 
         # Colesterol
-        cholesterol_frame = QFrame()
-        cholesterol_layout = QHBoxLayout(cholesterol_frame)
-        cholesterol_layout.setContentsMargins(0,0,0,0)
+        self.ldl = ValidatedLineEdit("double", 0, 500, 1)
+        exame_layout.addWidget(create_labeled_input("Colesterol LDL:", self.ldl, "mg/dL"))
         
-        self.ldl = make_spin(500, " mg/dL")
-        self.hdl = make_spin(200, " mg/dL")
-        
-        cholesterol_layout.addWidget(QLabel("LDL:"))
-        cholesterol_layout.addWidget(self.ldl)
-        cholesterol_layout.addWidget(QLabel("HDL:"))
-        cholesterol_layout.addWidget(self.hdl)
-        
-        exame_form.addRow(self.create_bold_label("Colesterol:"), cholesterol_frame)
+        self.hdl = ValidatedLineEdit("double", 0, 200, 1)
+        exame_layout.addWidget(create_labeled_input("Colesterol HDL:", self.hdl, "mg/dL"))
 
-        # Outros exames de sangue
-        self.trig = make_spin(1000, " mg/dL")
-        exame_form.addRow(self.create_bold_label("Triglicerídeos:"), self.trig)
+        # Triglicerídeos
+        self.trig = ValidatedLineEdit("double", 0, 1000, 1)
+        exame_layout.addWidget(create_labeled_input("Triglicerídeos:", self.trig, "mg/dL"))
 
-        glucose_frame = QFrame()
-        glucose_layout = QHBoxLayout(glucose_frame)
-        glucose_layout.setContentsMargins(0,0,0,0)
+        # Glicemia
+        self.glic = ValidatedLineEdit("double", 0, 500, 1)
+        exame_layout.addWidget(create_labeled_input("Glicemia de jejum:", self.glic, "mg/dL"))
         
-        self.glic = make_spin(500, " mg/dL")
-        self.hba1c = make_spin(20, " %")
-        
-        glucose_layout.addWidget(QLabel("Jejum:"))
-        glucose_layout.addWidget(self.glic)
-        glucose_layout.addWidget(QLabel("HbA1c:"))
-        glucose_layout.addWidget(self.hba1c)
-        
-        exame_form.addRow(self.create_bold_label("Glicemia:"), glucose_frame)
+        self.hba1c = ValidatedLineEdit("double", 0, 20, 1)
+        exame_layout.addWidget(create_labeled_input("HbA1c:", self.hba1c, "%"))
 
-        self.creat = make_spin(10, " mg/dL")
-        exame_form.addRow(self.create_bold_label("Creatinina:"), self.creat)
+        # Creatinina
+        self.creat = ValidatedLineEdit("double", 0, 10, 2)
+        exame_layout.addWidget(create_labeled_input("Creatinina:", self.creat, "mg/dL"))
 
         # Exames especiais
         self.protein = QCheckBox("Positiva")
-        exame_form.addRow(self.create_bold_label("Proteinúria:"), self.protein)
+        exame_layout.addWidget(create_labeled_input("Proteinúria:", self.protein))
 
         self.apneia = QCheckBox("Diagnosticada")
-        exame_form.addRow(self.create_bold_label("Apneia do sono:"), self.apneia)
+        exame_layout.addWidget(create_labeled_input("Apneia do sono:", self.apneia))
 
-        self.cortisol = make_spin(100, " µg/dL")
-        exame_form.addRow(self.create_bold_label("Cortisol sérico:"), self.cortisol)
+        self.cortisol = ValidatedLineEdit("double", 0, 100, 1)
+        exame_layout.addWidget(create_labeled_input("Cortisol sérico:", self.cortisol, "µg/dL"))
 
         self.mutacao = QCheckBox("Presente")
-        exame_form.addRow(self.create_bold_label("Mutação genética:"), self.mutacao)
+        exame_layout.addWidget(create_labeled_input("Mutação genética:", self.mutacao))
 
         # Parâmetros físicos
-        vitals_frame = QFrame()
-        vitals_layout = QHBoxLayout(vitals_frame)
-        vitals_layout.setContentsMargins(0,0,0,0)
+        self.bpm = ValidatedLineEdit("int", 0, 200)
+        exame_layout.addWidget(create_labeled_input("BPM em repouso:", self.bpm, "bpm"))
         
-        self.bpm = make_spin(200, " bpm", 0)
-        self.pm25 = make_spin(500, " µg/m³")
-        
-        vitals_layout.addWidget(QLabel("BPM repouso:"))
-        vitals_layout.addWidget(self.bpm)
-        vitals_layout.addWidget(QLabel("PM2.5:"))
-        vitals_layout.addWidget(self.pm25)
-        
-        exame_form.addRow(self.create_bold_label("Parâmetros adicionais:"), vitals_frame)
+        self.pm25 = ValidatedLineEdit("double", 0, 500, 1)
+        exame_layout.addWidget(create_labeled_input("PM2.5:", self.pm25, "µg/m³"))
 
-        self.exame_gbox.setLayout(exame_form)
+        self.exame_gbox.setLayout(exame_layout)
         content_layout.addWidget(self.exame_gbox)
 
         # --- Botões ---
@@ -770,12 +797,6 @@ class HypertensionAssessment(QWidget):
         if self.user["user_type"] == "patient":
             self.load_initial_data()
 
-    def create_bold_label(self, text):
-        """Cria um label com estilo em negrito"""
-        label = QLabel(text)
-        label.setStyleSheet("font-weight: bold; color: #34495e;")
-        return label
-
     def update_cpf_validation_message(self):
         """Atualiza a mensagem de validação do CPF em tempo real"""
         if self.user["user_type"] != "doctor":
@@ -788,13 +809,13 @@ class HypertensionAssessment(QWidget):
             self.cpf_validation_label.setStyleSheet("font-size: 9pt;")
         elif len(cpf) < 11:
             self.cpf_validation_label.setText(f"⏳ Digite mais {11 - len(cpf)} dígito(s)")
-            self.cpf_validation_label.setStyleSheet("font-size: 9pt; color: #f39c12; font-style: italic;")
+            self.cpf_validation_label.setStyleSheet("font-size: 9pt; color: #f39c12; font-style: italic; padding-left: 160px;")
         elif self.cpf_input.is_complete_and_valid():
             self.cpf_validation_label.setText("✅ CPF válido - Pressione Enter ou clique em Buscar")
-            self.cpf_validation_label.setStyleSheet("font-size: 9pt; color: #27ae60; font-weight: bold;")
+            self.cpf_validation_label.setStyleSheet("font-size: 9pt; color: #27ae60; font-weight: bold; padding-left: 160px;")
         else:
             self.cpf_validation_label.setText("❌ CPF inválido - Verifique os números digitados")
-            self.cpf_validation_label.setStyleSheet("font-size: 9pt; color: #e74c3c; font-weight: bold;")
+            self.cpf_validation_label.setStyleSheet("font-size: 9pt; color: #e74c3c; font-weight: bold; padding-left: 160px;")
 
     def search_patient_by_cpf(self):
         """Busca paciente por CPF no banco de dados"""
@@ -854,30 +875,30 @@ class HypertensionAssessment(QWidget):
         # Campos de avaliação ágil
         self.sexo_m.setChecked(False)
         self.hist_fam.setChecked(False)
-        self.altura.setValue(0)
-        self.peso.setValue(0)
+        self.altura.clear()
+        self.peso.clear()
         self.imc.clear()
-        self.frutas.setValue(0)
-        self.exercicio.setValue(0)
+        self.frutas.clear()
+        self.exercicio.clear()
         self.fuma.setChecked(False)
-        self.alcool.setValue(0)
-        self.estresse.setValue(0)
+        self.alcool.clear()
+        self.estresse.clear()
         self.sono.setChecked(False)
         
         # Campos de exames (sempre começam zerados)
         self.chk_exames.setChecked(False)
-        self.ldl.setValue(0)
-        self.hdl.setValue(0)
-        self.trig.setValue(0)
-        self.glic.setValue(0)
-        self.hba1c.setValue(0)
-        self.creat.setValue(0)
+        self.ldl.clear()
+        self.hdl.clear()
+        self.trig.clear()
+        self.glic.clear()
+        self.hba1c.clear()
+        self.creat.clear()
         self.protein.setChecked(False)
         self.apneia.setChecked(False)
-        self.cortisol.setValue(0)
+        self.cortisol.clear()
         self.mutacao.setChecked(False)
-        self.bpm.setValue(0)
-        self.pm25.setValue(0)
+        self.bpm.clear()
+        self.pm25.clear()
     
     def load_initial_data(self):
         """Carrega dados iniciais baseado no usuário ou paciente selecionado"""
@@ -903,9 +924,9 @@ class HypertensionAssessment(QWidget):
         # Calcula e exibe idade
         if patient_data and "birth_date" in patient_data and patient_data["birth_date"]:
             age = self.calculate_age(patient_data["birth_date"])
-            self.idade.setText(f"{age} anos")
+            self.idade.setText(f"{age}")
         else:
-            self.idade.setText("Idade N/A")
+            self.idade.setText("N/A")
         
         # Busca último relatório do paciente
         if patient_id:
@@ -926,22 +947,22 @@ class HypertensionAssessment(QWidget):
                     self.hist_fam.setChecked(auto.get("historico_familiar_hipertensao", False))
                     
                     if auto.get("altura_cm"):
-                        self.altura.setValue(auto["altura_cm"])
+                        self.altura.set_value(auto["altura_cm"])
                     if auto.get("peso_kg"):
-                        self.peso.setValue(auto["peso_kg"])
+                        self.peso.set_value(auto["peso_kg"])
                     
-                    self.frutas.setValue(auto.get("porcoes_frutas_vegetais_dia", 0))
-                    self.exercicio.setValue(auto.get("minutos_exercicio_semana", 0))
+                    self.frutas.set_value(auto.get("porcoes_frutas_vegetais_dia", 0))
+                    self.exercicio.set_value(auto.get("minutos_exercicio_semana", 0))
                     self.fuma.setChecked(auto.get("fuma_atualmente", False))
-                    self.alcool.setValue(auto.get("bebidas_alcoolicas_semana", 0))
-                    self.estresse.setValue(auto.get("nivel_estresse_0_10", 0))
+                    self.alcool.set_value(auto.get("bebidas_alcoolicas_semana", 0))
+                    self.estresse.set_value(auto.get("nivel_estresse_0_10", 0))
                     self.sono.setChecked(auto.get("sono_qualidade_ruim", False))
             
 
     def calcular_imc(self):
-        h = self.altura.value() / 100
+        h = self.altura.get_value() / 100
         if h > 0:
-            imc = self.peso.value() / (h * h)
+            imc = self.peso.get_value() / (h * h)
             self.imc.setText(f"{imc:.1f}")
         else:
             self.imc.clear()
@@ -951,7 +972,7 @@ class HypertensionAssessment(QWidget):
 
     def get_current_age(self):
         """Obtém idade do campo ou calcula"""
-        idade_text = self.idade.text().replace(" anos", "").strip()
+        idade_text = self.idade.text().strip()
         try:
             return int(idade_text)
         except:
@@ -972,14 +993,14 @@ class HypertensionAssessment(QWidget):
             "idade_anos": idade_atual,
             "sexo_masculino": self.sexo_m.isChecked(),
             "historico_familiar_hipertensao": self.hist_fam.isChecked(),
-            "altura_cm": self.altura.value(),
-            "peso_kg": self.peso.value(),
+            "altura_cm": self.altura.get_value(),
+            "peso_kg": self.peso.get_value(),
             "imc": float(self.imc.text()) if self.imc.text() else None,
-            "porcoes_frutas_vegetais_dia": self.frutas.value(),
-            "minutos_exercicio_semana": self.exercicio.value(),
+            "porcoes_frutas_vegetais_dia": self.frutas.get_value(),
+            "minutos_exercicio_semana": self.exercicio.get_value(),
             "fuma_atualmente": self.fuma.isChecked(),
-            "bebidas_alcoolicas_semana": self.alcool.value(),
-            "nivel_estresse_0_10": self.estresse.value(),
+            "bebidas_alcoolicas_semana": self.alcool.get_value(),
+            "nivel_estresse_0_10": self.estresse.get_value(),
             "sono_qualidade_ruim": self.sono.isChecked()
         }
 
@@ -987,18 +1008,18 @@ class HypertensionAssessment(QWidget):
         exames = None
         if self.chk_exames.isChecked():
             exames = {
-                "colesterol_ldl_mg_dL":     None if self.ldl.value() == 0 else self.ldl.value(),
-                "colesterol_hdl_mg_dL":     None if self.hdl.value() == 0 else self.hdl.value(),
-                "triglicerideos_mg_dL":     None if self.trig.value() == 0 else self.trig.value(),
-                "glicemia_jejum_mg_dL":     None if self.glic.value() == 0 else self.glic.value(),
-                "hba1c_percent":            None if self.hba1c.value() == 0 else self.hba1c.value(),
-                "creatinina_mg_dL":         None if self.creat.value() == 0 else self.creat.value(),
+                "colesterol_ldl_mg_dL":     None if self.ldl.get_value() == 0 else self.ldl.get_value(),
+                "colesterol_hdl_mg_dL":     None if self.hdl.get_value() == 0 else self.hdl.get_value(),
+                "triglicerideos_mg_dL":     None if self.trig.get_value() == 0 else self.trig.get_value(),
+                "glicemia_jejum_mg_dL":     None if self.glic.get_value() == 0 else self.glic.get_value(),
+                "hba1c_percent":            None if self.hba1c.get_value() == 0 else self.hba1c.get_value(),
+                "creatinina_mg_dL":         None if self.creat.get_value() == 0 else self.creat.get_value(),
                 "proteinuria_positiva":     self.protein.isChecked(),
                 "diagnostico_apneia_sono":  self.apneia.isChecked(),
-                "cortisol_serico_ug_dL":    None if self.cortisol.value() == 0 else self.cortisol.value(),
+                "cortisol_serico_ug_dL":    None if self.cortisol.get_value() == 0 else self.cortisol.get_value(),
                 "mutacao_genetica_hipertensao": self.mutacao.isChecked(),
-                "bpm_repouso":              None if self.bpm.value() == 0 else self.bpm.value(),
-                "indice_pm25":              None if self.pm25.value() == 0 else self.pm25.value()
+                "bpm_repouso":              None if self.bpm.get_value() == 0 else self.bpm.get_value(),
+                "indice_pm25":              None if self.pm25.get_value() == 0 else self.pm25.get_value()
             }
 
         # Armazena dados para o worker
